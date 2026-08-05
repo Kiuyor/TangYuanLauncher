@@ -1,0 +1,1657 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rev.Ini 编辑器 — Material Design 3 预览</title>
+<style>
+  /* ===== Local Fonts (offline-ready) ===== */
+  @font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('fonts/inter-400.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('fonts/inter-500.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('fonts/inter-700.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'Noto Sans SC';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('fonts/noto-sc-400.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'Noto Sans SC';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('fonts/noto-sc-500.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'Noto Sans SC';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('fonts/noto-sc-700.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('fonts/jetbrains-mono-400.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('fonts/jetbrains-mono-500.woff2') format('woff2');
+  }
+  @font-face {
+    font-family: 'JetBrains Mono';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('fonts/jetbrains-mono-700.woff2') format('woff2');
+  }
+
+  /* ===== Material 3 Color Tokens (Dark Theme, Amber Primary) ===== */
+  :root {
+    --md-sys-color-primary: #ffb868;
+    --md-sys-color-on-primary: #4a2800;
+    --md-sys-color-primary-container: #6d3c00;
+    --md-sys-color-on-primary-container: #ffdcc0;
+    --md-sys-color-secondary: #dbc5a6;
+    --md-sys-color-on-secondary: #3d2e1a;
+    --md-sys-color-secondary-container: #5c462d;
+    --md-sys-color-on-secondary-container: #f9dfc4;
+    --md-sys-color-tertiary: #b8cca4;
+    --md-sys-color-on-tertiary: #253618;
+    --md-sys-color-tertiary-container: #3e4f31;
+    --md-sys-color-on-tertiary-container: #d3e9be;
+    --md-sys-color-error: #ffb4ab;
+    --md-sys-color-on-error: #690005;
+    --md-sys-color-error-container: #93000a;
+    --md-sys-color-on-error-container: #ffdad6;
+    --md-sys-color-surface: #121212;
+    --md-sys-color-surface-dim: #121212;
+    --md-sys-color-surface-bright: #3a3836;
+    --md-sys-color-surface-container-lowest: #0d0d0d;
+    --md-sys-color-surface-container-low: #1b1b1b;
+    --md-sys-color-surface-container: #211f1e;
+    --md-sys-color-surface-container-high: #2c2a28;
+    --md-sys-color-surface-container-highest: #373533;
+    --md-sys-color-on-surface: #e6e1df;
+    --md-sys-color-on-surface-variant: #cdc5bf;
+    --md-sys-color-outline: #9a8f88;
+    --md-sys-color-outline-variant: #4e4640;
+
+    /* Shape */
+    --shape-none: 0px;
+    --shape-xs: 8px;
+    --shape-sm: 12px;
+    --shape-md: 16px;
+    --shape-lg: 20px;
+    --shape-xl: 32px;
+    --shape-full: 9999px;
+
+    /* Elevation overlays (dark theme uses tint overlay) */
+    --elevation-1: rgba(255,184,104,0.05);
+    --elevation-2: rgba(255,184,104,0.08);
+    --elevation-3: rgba(255,184,104,0.11);
+
+    /* Motion */
+    --ease-emphasized: cubic-bezier(0.2, 0.0, 0, 1.0);
+    --ease-decel: cubic-bezier(0.05, 0.7, 0.1, 1.0);
+    --ease-accel: cubic-bezier(0.3, 0.0, 0.8, 0.15);
+
+    /* Nav Rail */
+    --nav-width: 88px;
+    --appbar-height: 64px;
+    --bottom-height: 40px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #000;
+    font-family: "Noto Sans SC", "Inter", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    color: var(--md-sys-color-on-surface);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Window */
+  .window {
+    width: 1100px;
+    height: 780px;
+    background: var(--md-sys-color-surface);
+    border-radius: var(--shape-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+  }
+
+  /* ===== Top App Bar ===== */
+  .appbar {
+    height: var(--appbar-height);
+    background: var(--md-sys-color-surface-container);
+    display: flex;
+    align-items: center;
+    padding: 0 16px 0 4px;
+    gap: 12px;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .appbar-title-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .appbar-title {
+    font-size: 22px;
+    font-weight: 400;
+    line-height: 28px;
+    color: var(--md-sys-color-on-surface);
+    letter-spacing: 0;
+  }
+
+  .appbar-subtitle {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+    letter-spacing: 0.4px;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .appbar-trailing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .appbar-path {
+    background: var(--md-sys-color-surface-container-high);
+    color: var(--md-sys-color-on-surface-variant);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    padding: 4px 12px;
+    border-radius: var(--shape-full);
+    letter-spacing: 0.5px;
+  }
+
+  .appbar-enc {
+    background: transparent;
+    border: 1px solid var(--md-sys-color-outline);
+    color: var(--md-sys-color-on-surface);
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: var(--shape-full);
+    outline: none;
+    cursor: pointer;
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  /* ===== Buttons ===== */
+  .btn {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.1px;
+    padding: 8px 16px;
+    border-radius: var(--shape-full);
+    cursor: pointer;
+    border: none;
+    outline: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 150ms var(--ease-emphasized);
+    position: relative;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: currentColor;
+    opacity: 0;
+    transition: opacity 150ms var(--ease-emphasized);
+    pointer-events: none;
+  }
+  .btn:hover::after { opacity: 0.08; }
+  .btn:active::after { opacity: 0.12; }
+
+  .btn-filled {
+    background: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+  }
+
+  .btn-tonal {
+    background: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+  }
+
+  .btn-outlined {
+    background: transparent;
+    color: var(--md-sys-color-primary);
+    border: 1px solid var(--md-sys-color-outline);
+  }
+  .btn-outlined::after { background: var(--md-sys-color-primary); }
+
+  .btn-text {
+    background: transparent;
+    color: var(--md-sys-color-primary);
+    padding: 8px 12px;
+  }
+  .btn-text::after { background: var(--md-sys-color-primary); }
+
+  /* Icon button */
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--shape-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 150ms var(--ease-emphasized);
+    position: relative;
+  }
+  .icon-btn:hover {
+    background: rgba(230,225,223,0.08);
+    color: var(--md-sys-color-on-surface);
+  }
+  .icon-btn:active {
+    background: rgba(230,225,223,0.12);
+  }
+
+  /* ===== Body ===== */
+  .body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ===== Navigation Rail ===== */
+  .navrail {
+    width: var(--nav-width);
+    background: var(--md-sys-color-surface-container);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0 16px;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .nav-item {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--shape-full);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: pointer;
+    color: var(--md-sys-color-on-surface-variant);
+    position: relative;
+    transition: all 200ms var(--ease-emphasized);
+    user-select: none;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+  }
+
+  .nav-item .nav-icon {
+    font-size: 20px;
+    line-height: 24px;
+    transition: all 200ms var(--ease-emphasized);
+    z-index: 1;
+  }
+
+  .nav-item .nav-label {
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    letter-spacing: 0.5px;
+    transition: all 200ms var(--ease-emphasized);
+    z-index: 1;
+  }
+
+  .nav-item:hover {
+    background: rgba(230,225,223,0.08);
+    color: var(--md-sys-color-on-surface);
+  }
+
+  .nav-item.active {
+    color: var(--md-sys-color-on-secondary-container);
+  }
+
+  .nav-item.active .nav-bg {
+    position: absolute;
+    width: 56px;
+    height: 32px;
+    background: var(--md-sys-color-secondary-container);
+    border-radius: var(--shape-full);
+    top: 2px;
+    z-index: 0;
+    animation: navBgIn 300ms var(--ease-emphasized) forwards;
+  }
+
+  @keyframes navBgIn {
+    from { transform: scaleX(0.6); opacity: 0; }
+    to { transform: scaleX(1); opacity: 1; }
+  }
+
+  .nav-item.active .nav-icon {
+    color: var(--md-sys-color-on-secondary-container);
+  }
+
+  .nav-badge {
+    margin-top: auto;
+    width: 64px;
+    background: var(--md-sys-color-surface-container-high);
+    border-radius: var(--shape-md);
+    padding: 10px 8px;
+    text-align: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    color: var(--md-sys-color-on-surface-variant);
+    line-height: 1.5;
+  }
+
+  /* ===== Content ===== */
+  .content {
+    flex: 1;
+    background: var(--md-sys-color-surface);
+    overflow-y: auto;
+    padding: 24px 24px 16px;
+    position: relative;
+  }
+
+  .content::-webkit-scrollbar { width: 8px; }
+  .content::-webkit-scrollbar-track { background: transparent; }
+  .content::-webkit-scrollbar-thumb {
+    background: var(--md-sys-color-outline-variant);
+    border-radius: var(--shape-full);
+  }
+
+  /* ===== Page transitions (Shared Axis) ===== */
+  .page {
+    display: none;
+  }
+
+  .page.active {
+    display: block;
+    animation: pageEnter 300ms var(--ease-decel) forwards;
+  }
+
+  .page.exiting {
+    display: block;
+    animation: pageExit 250ms var(--ease-accel) forwards;
+    position: absolute;
+    inset: 24px 24px 0;
+  }
+
+  @keyframes pageEnter {
+    from { opacity: 0; transform: translateX(30px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  @keyframes pageExit {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(-30px); }
+  }
+
+  /* ===== Page Header ===== */
+  .page-head {
+    margin-bottom: 20px;
+  }
+
+  .page-title {
+    font-size: 28px;
+    font-weight: 400;
+    line-height: 36px;
+    color: var(--md-sys-color-on-surface);
+    margin-bottom: 4px;
+  }
+
+  .page-desc {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    letter-spacing: 0.25px;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  /* ===== Filled Card ===== */
+  .card {
+    background: var(--md-sys-color-surface-container-low);
+    border-radius: var(--shape-lg);
+    padding: 18px;
+    margin-bottom: 12px;
+    transition: background 150ms var(--ease-emphasized);
+    position: relative;
+  }
+
+  .card:hover {
+    background: color-mix(in srgb, var(--md-sys-color-surface-container-low), white 3%);
+  }
+
+  /* ===== Field Row ===== */
+  .field-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .field-info {
+    flex: 0 0 200px;
+    padding-top: 12px;
+  }
+
+  .field-label {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 24px;
+    letter-spacing: 0.15px;
+    color: var(--md-sys-color-on-surface);
+    display: block;
+  }
+
+  .field-key {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    letter-spacing: 0.5px;
+    color: var(--md-sys-color-on-surface-variant);
+    display: block;
+    margin-top: 2px;
+  }
+
+  .field-desc {
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+    letter-spacing: 0.4px;
+    color: var(--md-sys-color-on-surface-variant);
+    display: block;
+    margin-top: 4px;
+  }
+
+  .field-input-wrap {
+    flex: 1;
+  }
+
+  /* ===== Filled Text Field ===== */
+  .textfield {
+    position: relative;
+    width: 100%;
+  }
+
+  .textfield input,
+  .textfield select,
+  .textfield textarea {
+    width: 100%;
+    background: var(--md-sys-color-surface-container-highest);
+    border: none;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--shape-sm) var(--shape-sm) 0 0;
+    color: var(--md-sys-color-on-surface);
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 24px;
+    letter-spacing: 0.5px;
+    padding: 24px 16px 8px;
+    outline: none;
+    transition: border-color 200ms var(--ease-emphasized);
+    font-family: "Inter", sans-serif;
+  }
+
+  .textfield input:focus,
+  .textfield select:focus,
+  .textfield textarea:focus {
+    border-bottom-color: var(--md-sys-color-primary);
+    border-bottom-width: 2px;
+    padding-bottom: 7px;
+  }
+
+  .textfield label {
+    position: absolute;
+    left: 16px;
+    top: 16px;
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 24px;
+    letter-spacing: 0.5px;
+    color: var(--md-sys-color-on-surface-variant);
+    pointer-events: none;
+    transition: all 200ms var(--ease-emphasized);
+  }
+
+  .textfield input:focus + label,
+  .textfield input:not(:placeholder-shown) + label,
+  .textfield select:focus + label,
+  .textfield select:valid + label,
+  .textfield textarea:focus + label,
+  .textfield textarea:not(:placeholder-shown) + label {
+    top: 6px;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.4px;
+    color: var(--md-sys-color-primary);
+  }
+
+  .textfield input:not(:focus):not(:placeholder-shown) + label,
+  .textfield select:not(:focus):valid + label,
+  .textfield textarea:not(:focus):not(:placeholder-shown) + label {
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .textfield .helper {
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.4px;
+    color: var(--md-sys-color-on-surface-variant);
+    padding: 4px 16px 0;
+    display: block;
+  }
+
+  .textfield textarea {
+    min-height: 120px;
+    resize: vertical;
+    padding: 28px 16px 8px;
+  }
+
+  /* ===== Select / Dropdown (MD3 Exposed Dropdown Menu) ===== */
+  .textfield select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%23cdc5bf' d='M7.41 8.58L12 13.17l4.59-4.59L18 10l-6 6-6-6z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 20px;
+    cursor: pointer;
+    padding-right: 40px;
+  }
+
+  .textfield select:hover {
+    background-color: color-mix(in srgb, var(--md-sys-color-surface-container-highest), white 4%);
+  }
+
+  .textfield select option {
+    background: var(--md-sys-color-surface-container-highest);
+    color: var(--md-sys-color-on-surface);
+    font-size: 14px;
+    padding: 10px 16px;
+  }
+
+  .textfield select option:hover,
+  .textfield select option:focus {
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+  }
+
+  .textfield select option:checked {
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+  }
+
+  /* Custom MD3 Dropdown Menu (for demonstration) */
+  .dropdown-field {
+    position: relative;
+    width: 100%;
+  }
+
+  .dropdown-trigger {
+    width: 100%;
+    background: var(--md-sys-color-surface-container-highest);
+    border: none;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--shape-sm) var(--shape-sm) 0 0;
+    color: var(--md-sys-color-on-surface);
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 24px;
+    letter-spacing: 0.5px;
+    padding: 24px 40px 8px 16px;
+    outline: none;
+    transition: all 200ms var(--ease-emphasized);
+    cursor: pointer;
+    font-family: "Inter", sans-serif;
+    text-align: left;
+    position: relative;
+  }
+
+  .dropdown-trigger:hover {
+    background: color-mix(in srgb, var(--md-sys-color-surface-container-highest), white 4%);
+  }
+
+  .dropdown-trigger.open,
+  .dropdown-trigger:focus {
+    border-bottom-color: var(--md-sys-color-primary);
+    border-bottom-width: 2px;
+    padding-bottom: 7px;
+  }
+
+  .dropdown-trigger .dropdown-arrow {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--md-sys-color-on-surface-variant);
+    transition: transform 200ms var(--ease-emphasized);
+    font-size: 20px;
+  }
+
+  .dropdown-trigger.open .dropdown-arrow {
+    transform: translateY(-50%) rotate(180deg);
+  }
+
+  .dropdown-trigger .dropdown-value {
+    display: block;
+    font-size: 16px;
+    line-height: 24px;
+    letter-spacing: 0.5px;
+    color: var(--md-sys-color-on-surface);
+    margin-top: 2px;
+  }
+
+  .dropdown-trigger .dropdown-label {
+    position: absolute;
+    left: 16px;
+    top: 6px;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.4px;
+    color: var(--md-sys-color-primary);
+    pointer-events: none;
+    transition: all 200ms var(--ease-emphasized);
+  }
+
+  .dropdown-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: var(--md-sys-color-surface-container-highest);
+    border-radius: var(--shape-sm);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
+    z-index: 100;
+    overflow: hidden;
+    opacity: 0;
+    transform: scaleY(0.85) translateY(-8px);
+    transform-origin: top center;
+    pointer-events: none;
+    transition: all 200ms var(--ease-emphasized);
+    max-height: 280px;
+    overflow-y: auto;
+  }
+
+  .dropdown-menu.open {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+    pointer-events: auto;
+  }
+
+  .dropdown-menu::-webkit-scrollbar { width: 6px; }
+  .dropdown-menu::-webkit-scrollbar-thumb {
+    background: var(--md-sys-color-outline-variant);
+    border-radius: var(--shape-full);
+  }
+
+  .dropdown-item {
+    padding: 12px 16px;
+    font-size: 14px;
+    line-height: 20px;
+    letter-spacing: 0.25px;
+    color: var(--md-sys-color-on-surface);
+    cursor: pointer;
+    transition: background 100ms var(--ease-emphasized);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .dropdown-item:hover {
+    background: rgba(255,184,104,0.08);
+  }
+
+  .dropdown-item.selected {
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+  }
+
+  .dropdown-item .check-icon {
+    font-size: 18px;
+    width: 18px;
+    opacity: 0;
+  }
+
+  .dropdown-item.selected .check-icon {
+    opacity: 1;
+  }
+
+  /* ===== Switch (MD3) ===== */
+  .switch-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-top: 8px;
+  }
+
+  .switch {
+    width: 52px;
+    height: 32px;
+    background: var(--md-sys-color-surface-container-highest);
+    border: 2px solid var(--md-sys-color-outline);
+    border-radius: var(--shape-full);
+    position: relative;
+    cursor: pointer;
+    transition: all 150ms var(--ease-emphasized);
+    flex-shrink: 0;
+  }
+
+  .switch.on {
+    background: var(--md-sys-color-primary-container);
+    border-color: var(--md-sys-color-primary-container);
+  }
+
+  .switch-knob {
+    width: 16px;
+    height: 16px;
+    background: var(--md-sys-color-outline);
+    border-radius: var(--shape-full);
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    transition: all 150ms var(--ease-emphasized);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  .switch.on .switch-knob {
+    left: 28px;
+    background: var(--md-sys-color-primary);
+  }
+
+  .switch-label {
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    letter-spacing: 0.25px;
+    color: var(--md-sys-color-on-surface);
+  }
+
+  /* ===== Chips ===== */
+  .chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 8px;
+  }
+
+  .chip {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: var(--shape-full);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.1px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 150ms var(--ease-emphasized);
+    user-select: none;
+    border: 1px solid var(--md-sys-color-outline);
+    background: transparent;
+    color: var(--md-sys-color-on-surface-variant);
+    font-family: "JetBrains Mono", monospace;
+  }
+
+  .chip:hover {
+    background: rgba(230,225,223,0.08);
+  }
+
+  .chip:active {
+    background: rgba(230,225,223,0.12);
+  }
+
+  .chip.selected {
+    background: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+    border-color: transparent;
+  }
+
+  /* ===== Tabs (Primary) ===== */
+  .tabs-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    margin-bottom: 16px;
+    position: relative;
+  }
+
+  .tab {
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    letter-spacing: 0.1px;
+    color: var(--md-sys-color-on-surface-variant);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    transition: color 200ms var(--ease-emphasized);
+    font-family: inherit;
+  }
+
+  .tab:hover {
+    color: var(--md-sys-color-on-surface);
+    background: rgba(230,225,223,0.04);
+  }
+
+  .tab.active {
+    color: var(--md-sys-color-primary);
+  }
+
+  .tab-indicator {
+    position: absolute;
+    bottom: 0;
+    height: 2px;
+    background: var(--md-sys-color-primary);
+    border-radius: var(--shape-full) var(--shape-full) 0 0;
+    transition: all 300ms var(--ease-emphasized);
+  }
+
+  /* ===== Tool Card ===== */
+  .tool-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .tool-left {
+    flex: 1;
+  }
+
+  .tool-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .tool-cat {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    color: var(--md-sys-color-primary);
+    padding: 3px 10px;
+    background: var(--md-sys-color-primary-container);
+    border-radius: var(--shape-full);
+  }
+
+  .tool-risk {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .tool-name {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 24px;
+    letter-spacing: 0.15px;
+    color: var(--md-sys-color-on-surface);
+    margin-bottom: 4px;
+  }
+
+  .tool-desc {
+    font-size: 14px;
+    line-height: 20px;
+    letter-spacing: 0.25px;
+    color: var(--md-sys-color-on-surface-variant);
+    margin-bottom: 4px;
+  }
+
+  .tool-action {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.4px;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .tool-right {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    min-width: 80px;
+  }
+
+  .tool-status {
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.4px;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+  .tool-status.ok { color: var(--md-sys-color-tertiary); }
+
+  /* ===== Bottom Bar ===== */
+  .bottom-bar {
+    height: var(--bottom-height);
+    background: var(--md-sys-color-surface-container);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    flex-shrink: 0;
+    gap: 12px;
+  }
+
+  .status-msg {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.4px;
+    color: var(--md-sys-color-on-surface-variant);
+    flex: 1;
+  }
+
+  .status-msg.ok {
+    color: var(--md-sys-color-tertiary);
+  }
+
+  .status-msg.err {
+    color: var(--md-sys-color-error);
+  }
+
+  .status-clock {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.4px;
+    color: var(--md-sys-color-on-surface-variant);
+    opacity: 0.6;
+  }
+
+  /* ===== Snackbar ===== */
+  .snackbar {
+    position: fixed;
+    bottom: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--md-sys-color-inverse-surface, #e6e1df);
+    color: var(--md-sys-color-inverse-on-surface, #121212);
+    padding: 14px 16px;
+    border-radius: var(--shape-sm);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    letter-spacing: 0.25px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 3px 5px rgba(0,0,0,0.2);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 300ms var(--ease-decel), transform 300ms var(--ease-decel);
+  }
+
+  .snackbar.show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .snackbar-action {
+    color: var(--md-sys-color-inverse-primary, #6d3c00);
+    font-weight: 500;
+    cursor: pointer;
+    text-transform: uppercase;
+    font-size: 14px;
+    letter-spacing: 0.1px;
+  }
+
+  /* ===== Divider ===== */
+  .divider {
+    height: 1px;
+    background: var(--md-sys-color-outline-variant);
+    margin: 8px 0;
+  }
+
+  /* ===== Notice ===== */
+  .notice {
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+    border-radius: var(--shape-xs);
+    padding: 12px 16px;
+    font-size: 14px;
+    line-height: 20px;
+    letter-spacing: 0.25px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* Spinbox-like number input */
+  .number-wrap {
+    display: flex;
+    align-items: center;
+  }
+
+  .number-field {
+    width: 100px;
+    background: var(--md-sys-color-surface-container-highest);
+    border: none;
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+    border-radius: var(--shape-sm) var(--shape-sm) 0 0;
+    color: var(--md-sys-color-on-surface);
+    font-size: 16px;
+    font-family: "JetBrains Mono", monospace;
+    padding: 24px 16px 8px;
+    outline: none;
+    text-align: center;
+    transition: border-color 200ms var(--ease-emphasized);
+  }
+
+  .number-field:focus {
+    border-bottom-color: var(--md-sys-color-primary);
+    border-bottom-width: 2px;
+    padding-bottom: 7px;
+  }
+</style>
+<style>
+  /* ===== Inline SVG Icon System (offline, color inherits currentColor) ===== */
+  .icon {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+    flex-shrink: 0;
+    vertical-align: middle;
+    display: inline-block;
+    user-select: none;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="window">
+  <!-- Top App Bar -->
+  <div class="appbar">
+    <button class="icon-btn" title="菜单" style="visibility:hidden;"><span data-icon="menu"></span></button>
+
+    <div class="appbar-title-col">
+      <div class="appbar-title">Rev.Ini 编辑器</div>
+      <div class="appbar-subtitle">CS:GO 配置工具</div>
+    </div>
+
+    <div class="appbar-trailing">
+      <span class="appbar-path">rev.ini</span>
+      <select class="appbar-enc">
+        <option>ANSI (GBK)</option>
+        <option>UTF-8</option>
+      </select>
+      <button class="btn btn-outlined"><span data-icon="folder_open" data-size="18"></span> 打开</button>
+      <button class="btn btn-filled" id="saveBtn"><span data-icon="save" data-size="18"></span> 保存</button>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+    <!-- Navigation Rail -->
+    <nav class="navrail">
+      <button class="nav-item active" data-page="common">
+        <div class="nav-bg"></div>
+        <span class="nav-icon"><span data-icon="settings" data-size="22"></span></span>
+        <span class="nav-label">常用</span>
+      </button>
+      <button class="nav-item" data-page="loader">
+        <div class="nav-bg" style="display:none;"></div>
+        <span class="nav-icon"><span data-icon="rocket_launch" data-size="22"></span></span>
+        <span class="nav-label">加载器</span>
+      </button>
+      <button class="nav-item" data-page="advanced">
+        <div class="nav-bg" style="display:none;"></div>
+        <span class="nav-icon"><span data-icon="build" data-size="22"></span></span>
+        <span class="nav-label">高级</span>
+      </button>
+      <button class="nav-item" data-page="tools">
+        <div class="nav-bg" style="display:none;"></div>
+        <span class="nav-icon"><span data-icon="construction" data-size="22"></span></span>
+        <span class="nav-label">工具</span>
+      </button>
+
+      <div class="nav-badge">
+        CS:GO<br>1.35.7.7
+      </div>
+    </nav>
+
+    <!-- Content -->
+    <div class="content" id="contentArea">
+      <!-- 常用设置 -->
+      <div class="page active" id="page-common">
+        <div class="page-head">
+          <div class="page-title">常用设置</div>
+          <div class="page-desc">玩家信息、界面语言、段位伪装等基础配置</div>
+        </div>
+
+        <div class="card">
+          <div class="field-row">
+            <div class="field-info">
+              <span class="field-label">游戏昵称</span>
+              <span class="field-key">NickName</span>
+              <span class="field-desc">游戏内显示的玩家名称</span>
+            </div>
+            <div class="field-input-wrap">
+              <div class="textfield">
+                <input type="text" id="nick" placeholder=" " value="Player">
+                <label for="nick">游戏昵称</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="field-row">
+            <div class="field-info">
+              <span class="field-label">战队标签</span>
+              <span class="field-key">ClanTag</span>
+              <span class="field-desc">名称前的方括号标签</span>
+            </div>
+            <div class="field-input-wrap">
+              <div class="textfield">
+                <input type="text" id="clan" placeholder=" " value="">
+                <label for="clan">战队标签</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="field-row">
+            <div class="field-info">
+              <span class="field-label">界面语言</span>
+              <span class="field-key">Language</span>
+              <span class="field-desc">游戏客户端显示语言</span>
+            </div>
+            <div class="field-input-wrap">
+              <div class="dropdown-field" id="dropdown-lang">
+                <button class="dropdown-trigger" data-value="schinese">
+                  <span class="dropdown-label">界面语言</span>
+                  <span class="dropdown-value">schinese (简体中文)</span>
+                  <span class="dropdown-arrow"><span data-icon="expand_more"></span></span>
+                </button>
+                <div class="dropdown-menu">
+                  <div class="dropdown-item selected" data-value="schinese"><span class="check-icon"><span data-icon="check" data-size="18"></span></span>schinese (简体中文)</div>
+                  <div class="dropdown-item" data-value="english"><span class="check-icon"><span data-icon="check" data-size="18"></span></span>english (English)</div>
+                  <div class="dropdown-item" data-value="russian"><span class="check-icon"><span data-icon="check" data-size="18"></span></span>russian (Русский)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="field-row">
+            <div class="field-info">
+              <span class="field-label">伪装段位</span>
+              <span class="field-key">PlayerRank</span>
+              <span class="field-desc">主菜单显示的竞技段位</span>
+            </div>
+            <div class="field-input-wrap">
+              <div class="dropdown-field" id="dropdown-rank">
+                <button class="dropdown-trigger" data-value="gn1">
+                  <span class="dropdown-label">伪装段位</span>
+                  <span class="dropdown-value">黄金新星 I</span>
+                  <span class="dropdown-arrow"><span data-icon="expand_more"></span></span>
+                </button>
+                <div class="dropdown-menu">
+                  <div class="dropdown-item" data-value="none"><span class="check-icon"><span data-icon="check" data-size="18"></span></span>无段位</div>
+                  <div class="dropdown-item" data-value="s1"><span class="check-icon"><span data-icon="check" data-size="18"></span></span>白银 I</div>
+                  <div class="dropdown-item" data-value="s2"><span class="check-icon"><span data-icon="check" data-size="18"></span></span>白银 II</div>
+                  <div class="dropdown-item selected" data-value="gn1"><span class="check-icon"><span data-icon="check" data-size="18"></span></span>黄金新星 I</div>
+                  <div class="dropdown-item" data-value="mg"><span class="check-icon"><span data-icon="check" data-size="18"></span></span>大师级守护者</div>
+                  <div class="dropdown-item" data-value="le"><span class="check-icon"><span data-icon="check" data-size="18"></span></span>传奇之鹰</div>
+                  <div class="dropdown-item" data-value="ge"><span class="check-icon"><span data-icon="check" data-size="18"></span></span>全球精英</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="field-row">
+            <div class="field-info">
+              <span class="field-label">服役勋章</span>
+              <span class="field-key">PlayerCoin</span>
+              <span class="field-desc">年份勋章 ID，0 为无</span>
+            </div>
+            <div class="field-input-wrap">
+              <div class="textfield">
+                <input type="text" id="coin" placeholder=" " value="2021">
+                <label for="coin">服役勋章</label>
+                <span class="helper">例如: 2021, 2022, 2023</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="field-row">
+            <div class="field-info">
+              <span class="field-label">头像 ID</span>
+              <span class="field-key">PlayerAvatar</span>
+              <span class="field-desc">Steam 头像编号</span>
+            </div>
+            <div class="field-input-wrap">
+              <div class="textfield">
+                <input type="text" id="avatar" placeholder=" " value="0">
+                <label for="avatar">头像 ID</label>
+                <span class="helper">0 为默认头像</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 加载器 -->
+      <div class="page" id="page-loader">
+        <div class="page-head">
+          <div class="page-title">加载器</div>
+          <div class="page-desc">启动命令与推荐启动项</div>
+        </div>
+
+        <div class="notice">
+          <span data-icon="info" data-size="18" style="color:var(--md-sys-color-on-primary-container);"></span>
+          <span>每行一个启动参数，支持以 + 或 - 开头的 CS:GO 启动项</span>
+        </div>
+
+        <div class="card">
+          <div class="field-row" style="align-items:flex-start;">
+            <div class="field-info">
+              <span class="field-label">启动命令</span>
+              <span class="field-key">ProcName</span>
+              <span class="field-desc">revLoader 启动时附加的参数</span>
+            </div>
+            <div class="field-input-wrap">
+              <div class="textfield">
+                <textarea id="proc" placeholder=" ">-novid -high -threads 4
++fps_max 300
+-console</textarea>
+                <label for="proc">启动命令</label>
+              </div>
+              <div class="chip-group">
+                <span class="chip" data-val="+fps_max 300">+fps_max 300</span>
+                <span class="chip" data-val="-novid">-novid</span>
+                <span class="chip" data-val="-high">-high</span>
+                <span class="chip" data-val="-console">-console</span>
+                <span class="chip" data-val="-window">-window</span>
+                <span class="chip" data-val="-w 1280 -h 720">-w 1280 -h 720</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 高级设置 -->
+      <div class="page" id="page-advanced">
+        <div class="page-head">
+          <div class="page-title">高级设置</div>
+          <div class="page-desc">模拟器、网络、服务器与版本控制</div>
+        </div>
+
+        <div class="tabs-bar" id="advTabs">
+          <button class="tab active" data-tab="emu">模拟器</button>
+          <button class="tab" data-tab="server">游戏服务器</button>
+          <button class="tab" data-tab="nsnet">NSNet</button>
+          <button class="tab" data-tab="version">版本</button>
+          <div class="tab-indicator" id="tabIndicator"></div>
+        </div>
+
+        <div class="card">
+          <div class="field-row">
+            <div class="field-info">
+              <span class="field-label">模拟器路径</span>
+              <span class="field-key">EmulatorPath</span>
+            </div>
+            <div class="field-input-wrap">
+              <div class="textfield">
+                <input type="text" id="emu" placeholder=" " value="revLoader.exe">
+                <label for="emu">模拟器路径</label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="field-row">
+            <div class="field-info">
+              <span class="field-label">自动更新</span>
+              <span class="field-key">AutoUpdate</span>
+            </div>
+            <div class="field-input-wrap">
+              <div class="switch-wrap">
+                <div class="switch on" onclick="this.classList.toggle('on')">
+                  <div class="switch-knob"></div>
+                </div>
+                <span class="switch-label">Enabled</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 修复工具 -->
+      <div class="page" id="page-tools">
+        <div class="page-head">
+          <div class="page-title">修复工具</div>
+          <div class="page-desc">一键运行官方维护脚本</div>
+        </div>
+
+        <div class="card tool-card">
+          <div class="tool-left">
+            <div class="tool-header">
+              <span class="tool-cat">MAINTENANCE</span>
+              <span class="tool-risk">风险: 低</span>
+            </div>
+            <div class="tool-name">清除武器皮肤缓存</div>
+            <div class="tool-desc">删除武器皮肤 Flash 缓存，修复皮肤显示错乱</div>
+            <div class="tool-action">执行: cleancache.bat</div>
+          </div>
+          <div class="tool-right">
+            <button class="btn btn-tonal" onclick="runTool(this)"><span data-icon="play_arrow" data-size="18"></span> 运行</button>
+            <span class="tool-status" id="status1">待运行</span>
+          </div>
+        </div>
+
+        <div class="card tool-card">
+          <div class="tool-left">
+            <div class="tool-header">
+              <span class="tool-cat">REGISTRY</span>
+              <span class="tool-risk">风险: 中</span>
+            </div>
+            <div class="tool-name">修复 Steam 客户端错误</div>
+            <div class="tool-desc">重置 SteamClientDll 注册表，修复 Steam 加载错误</div>
+            <div class="tool-action">执行: Fix-SteamError.bat</div>
+          </div>
+          <div class="tool-right">
+            <button class="btn btn-tonal" onclick="runTool(this)"><span data-icon="play_arrow" data-size="18"></span> 运行</button>
+            <span class="tool-status" id="status2">待运行</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div style="font-size:12px;line-height:16px;letter-spacing:0.4px;color:var(--md-sys-color-on-surface-variant);">
+          工具直接调用 CS:GO 目录下的官方维护脚本，运行结果以脚本输出为准。<br>
+          修复 Steam 错误会修改当前用户的注册表(HKCU)，请按需使用。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Bar -->
+  <div class="bottom-bar">
+    <span class="status-msg" id="statusMsg">就绪</span>
+    <span class="status-clock" id="clock">14:32:07</span>
+  </div>
+
+  <!-- Snackbar -->
+  <div class="snackbar" id="snackbar">
+    <span id="snackText">已保存</span>
+    <span class="snackbar-action" id="snackAction" style="display:none;">撤销</span>
+  </div>
+</div>
+
+<script>
+  // ===== Inline SVG Icons (Material Symbols outline paths, offline) =====
+  const ICONS = {
+    menu: 'M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z',
+    folder_open: 'M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z',
+    save: 'M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z',
+    settings: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z',
+    rocket_launch: 'M9.19 6.35c-2.04 2.29-3.44 5.58-3.57 5.89L2 10.69l4.05-4.05c.47-.47 1.15-.68 1.81-.55l1.33.26zM11.17 17s3.74-1.55 5.89-3.7c5.4-5.4 4.5-9.62 4.21-10.57-.95-.3-5.17-1.19-10.57 4.21C8.55 9.09 7 12.83 7 12.83L11.17 17zm6.48-2.19c-2.29 2.04-5.58 3.44-5.89 3.57L13.31 22l4.05-4.05c.47-.47.68-1.15.55-1.81l-.26-1.33zM9 18c0 .83-.34 1.58-.88 2.12C6.94 21.3 2 22 2 22s.7-4.94 2.88-6.12C5.42 15.34 6.17 15 7 15c1.66 0 3 1.34 3 3zm-3.31.31c-.24.24-.56.38-.92.38-.18 0-.36-.04-.53-.12-.07.49-.17 1.06-.32 1.61.55-.15 1.12-.25 1.61-.32-.08-.17-.12-.35-.12-.53 0-.36.14-.68.38-.92l.9-.9z',
+    build: 'M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z',
+    construction: 'M13.78 15.41l-7.37-7.37L8 6.5l-2-2-1.94 1.94C3.52 7.06 3.25 7.16 3 7.16c-.52 0-1-.41-1-.95 0-.21.06-.41.18-.58L5.4 2.3c.63-.63 1.66-.63 2.29 0L9 3.63l1.56-1.56-1.35-1.35c-.47-.47-1.24-.47-1.72 0L3.62 4.03C2.73 4.92 2 5.98 2 8c0 .36.03.71.09 1.05L5.06 12l3.09-3.09c.94.94 1.63 2.18 1.98 3.55l5.65 5.65zM5.41 2.65l1.88-1.88.71.71-1.88 1.88zM20.71 15.16L12.1 6.55c-.39-.39-1.02-.39-1.41 0s-.39 1.02 0 1.41l8.61 8.61c.39.39 1.02.39 1.41 0s.39-1.02 0-1.41zM15.66 18.16l-3.06 3.06c-.78.78-2.05.78-2.83 0l-.71-.71 6.36-6.36.71.71c.78.78.78 2.05 0 2.83z',
+    info: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z',
+    expand_more: 'M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z',
+    play_arrow: 'M8 5v14l11-7z',
+    check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+    pending: 'M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z'
+  };
+
+  function renderIcon(el, name, size) {
+    const s = size || 20;
+    el.innerHTML = '<svg class="icon" viewBox="0 0 24 24" width="' + s + '" height="' + s + '" aria-hidden="true"><path d="' + ICONS[name] + '"/></svg>';
+  }
+
+  function iconHTML(name, size) {
+    const s = size || 20;
+    return '<svg class="icon" viewBox="0 0 24 24" width="' + s + '" height="' + s + '" aria-hidden="true"><path d="' + ICONS[name] + '"/></svg>';
+  }
+
+  // Auto-render all data-icon elements
+  document.querySelectorAll('[data-icon]').forEach(el => {
+    renderIcon(el, el.dataset.icon, parseInt(el.dataset.size || '20', 10));
+  });
+
+  // ===== Navigation Rail =====
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const targetPage = item.dataset.page;
+      const currentPage = document.querySelector('.page.active');
+      const currentId = currentPage ? currentPage.id.replace('page-', '') : '';
+
+      if (targetPage === currentId) return;
+
+      // Nav state
+      document.querySelectorAll('.nav-item').forEach(i => {
+        i.classList.remove('active');
+        i.querySelector('.nav-bg').style.display = 'none';
+      });
+      item.classList.add('active');
+      item.querySelector('.nav-bg').style.display = 'block';
+
+      // Page transition (Shared Axis)
+      const pages = document.querySelectorAll('.page');
+      pages.forEach(p => {
+        if (p.classList.contains('active')) {
+          p.classList.add('exiting');
+          p.classList.remove('active');
+          setTimeout(() => p.classList.remove('exiting'), 300);
+        }
+      });
+
+      const next = document.getElementById('page-' + targetPage);
+      next.classList.add('active');
+
+      setStatus('已切换至 ' + item.querySelector('.nav-label').textContent);
+    });
+  });
+
+  // ===== Tabs =====
+  const tabBar = document.getElementById('advTabs');
+  const indicator = document.getElementById('tabIndicator');
+
+  function updateIndicator(tab) {
+    indicator.style.width = tab.offsetWidth + 'px';
+    indicator.style.left = tab.offsetLeft + 'px';
+  }
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      updateIndicator(tab);
+    });
+  });
+
+  // Init indicator
+  const activeTab = document.querySelector('.tab.active');
+  if (activeTab) updateIndicator(activeTab);
+
+  // ===== Custom Dropdown =====
+  document.querySelectorAll('.dropdown-field').forEach(dd => {
+    const trigger = dd.querySelector('.dropdown-trigger');
+    const menu = dd.querySelector('.dropdown-menu');
+    const items = dd.querySelectorAll('.dropdown-item');
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isOpen = menu.classList.contains('open');
+      // Close all other dropdowns
+      document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('open'));
+      document.querySelectorAll('.dropdown-trigger').forEach(t => t.classList.remove('open'));
+      if (!isOpen) {
+        menu.classList.add('open');
+        trigger.classList.add('open');
+      }
+    });
+
+    items.forEach(item => {
+      item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const value = item.dataset.value;
+        const text = item.textContent.trim();
+        trigger.dataset.value = value;
+        trigger.querySelector('.dropdown-value').textContent = text;
+        items.forEach(i => i.classList.remove('selected'));
+        item.classList.add('selected');
+        menu.classList.remove('open');
+        trigger.classList.remove('open');
+      });
+    });
+  });
+
+  // Close dropdowns on outside click
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('open'));
+    document.querySelectorAll('.dropdown-trigger').forEach(t => t.classList.remove('open'));
+  });
+
+  // ===== Clock =====
+  function tickClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    document.getElementById('clock').textContent = `${h}:${m}:${s}`;
+  }
+  setInterval(tickClock, 1000);
+  tickClock();
+
+  // ===== Status =====
+  function setStatus(text, type) {
+    const el = document.getElementById('statusMsg');
+    el.textContent = text;
+    el.className = 'status-msg';
+    if (type === 'ok') el.classList.add('ok');
+    if (type === 'err') el.classList.add('err');
+  }
+
+  // ===== Snackbar =====
+  function showSnackbar(text, actionText) {
+    const sb = document.getElementById('snackbar');
+    const st = document.getElementById('snackText');
+    const sa = document.getElementById('snackAction');
+    st.textContent = text;
+    sa.style.display = actionText ? 'inline' : 'none';
+    sa.textContent = actionText || '';
+    sb.classList.add('show');
+    setTimeout(() => sb.classList.remove('show'), 4000);
+  }
+
+  // ===== Save =====
+  document.getElementById('saveBtn').addEventListener('click', function() {
+    showSnackbar('配置已保存', '撤销');
+    setStatus('已保存 rev.ini [ANSI]', 'ok');
+    setTimeout(() => setStatus('就绪'), 4000);
+  });
+
+  // ===== Tool Run =====
+  function runTool(btn) {
+    const statusEl = btn.parentElement.querySelector('.tool-status');
+    btn.innerHTML = iconHTML('pending', 18);
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+    statusEl.textContent = '执行中...';
+    statusEl.style.color = 'var(--md-sys-color-primary)';
+
+    setTimeout(() => {
+      btn.innerHTML = iconHTML('check', 18);
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      statusEl.textContent = '已完成';
+      statusEl.classList.add('ok');
+      showSnackbar('工具执行完成');
+      setTimeout(() => {
+        btn.innerHTML = iconHTML('play_arrow', 18) + ' 运行';
+        statusEl.textContent = '待运行';
+        statusEl.classList.remove('ok');
+        statusEl.style.color = '';
+      }, 3000);
+    }, 1500);
+  }
+
+  // ===== Chips =====
+  document.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('selected');
+      const ta = document.getElementById('proc');
+      const val = chip.dataset.val;
+      const lines = ta.value.split('\n').filter(l => l.trim());
+      if (chip.classList.contains('selected')) {
+        if (!lines.includes(val)) {
+          ta.value = lines.concat(val).join('\n');
+        }
+      } else {
+        ta.value = lines.filter(l => l !== val).join('\n');
+      }
+    });
+  });
+</script>
+
+</body>
+</html>

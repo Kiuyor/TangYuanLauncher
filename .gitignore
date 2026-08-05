@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+.venv311/
+
+# 构建产物
+dist/
+build/
+*.exe
+*.msi
+*.zip
+nuitka-build/
+
+# 截图 / 视觉验证产物
+shots/
+
+# 用户数据(设置已存至 %APPDATA%\RevIniEditor)
+settings.json
+
+# 代理工作目录
+.opensquilla/
+.opensquilla-cache/
+
+# 深度审查工作产物
+.deep-review/
+findings.md
+findings2.md
+
+# 备份文件
+*.bak
+
+# 工具缓存
+.flet/
+.hermes/
+.ruff_cache/
+*.log
