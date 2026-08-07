@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""内置工具回归验证 (ad-hoc, 非测试套件)
+
+用法: .venv311/Scripts/python.exe scripts/verify_tools.py
+覆盖: newloader.exe 安装(不覆盖原件/幂等) / 工具元数据 / 启动优先逻辑 / ruff 基线
+"""
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+PROJ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJ)
+
+fails = []
+
+
+def check(name, cond, detail=""):
+    print(f'[{"PASS" if cond else "FAIL"}] {name}' + (f" | {detail}" if detail else ""))
+    if not cond:
+        fails.append(name)
+
+
+def main():
+    from app.tools import REPAIR_TOOLS, _install_loader
+
+    asset = os.path.join(PROJ, "assets", "Loader_opt23.exe")
+    asset_sz = os.path.getsize(asset)
+
+    # --- 模拟游戏目录: 原件 Loader/revLoader 必须保持不动 ---
+    tmp = tempfile.mkdtemp()
+    orig = b"Y" * 34816
+    open(os.path.join(tmp, "Loader.exe"), "wb").write(orig)
+    open(os.path.join(tmp, "revLoader.exe"), "wb").write(orig)
+
+    res = []
+    _install_loader(tmp, lambda ok, m: res.append((ok, m)))
+    check("install ok", res and res[-1][0], str(res[-1] if res else None))
+    check("newloader.exe created w/ optimized size",
+          os.path.getsize(os.path.join(tmp, "newloader.exe")) == asset_sz)
+    check("Loader.exe untouched",
+          open(os.path.join(tmp, "Loader.exe"), "rb").read() == orig)
+    check("revLoader.exe untouched",
+          open(os.path.join(tmp, "revLoader.exe"), "rb").read() == orig)
+    check("no backup files", not [f for f in os.listdir(tmp) if "bak" in f])
+
+    res.clear()
+    _install_loader(tmp, lambda ok, m: res.append((ok, m)))
+    check("idempotent", res and res[-1][0] and "无需重复安装" in res[-1][1])
+    check("still 3 files", len(os.listdir(tmp)) == 3, str(os.listdir(tmp)))
+    shutil.rmtree(tmp)
+
+    # --- 工具元数据 ---
+    t = [t for t in REPAIR_TOOLS if t.name.startswith("安装优化")][0]
+    check("risk=低", t.risk == "低")
+    check("desc mentions newloader.exe", "newloader.exe" in t.desc)
+
+    # --- 启动优先逻辑 (闭包不易单测, 静态确认 + 导入) ---
+    src = open(os.path.join(PROJ, "flet_app", "main.py"), encoding="utf-8").read()
+    check("launch prefers newloader.exe",
+          'os.path.isfile(os.path.join(d, "newloader.exe"))' in src)
+    check("Popen uses loader_exe", "subprocess.Popen([loader_exe]" in src)
+
+    import flet_app.main  # noqa: F401 - 模块级导入即冒烟
+    check("flet_app.main imports", True)
+
+    # --- ruff 基线 (原版两文件 31, 不允许新增) ---
+    r = subprocess.run([sys.executable, "-m", "ruff", "check", "app/tools.py", "flet_app/main.py"],
+                       capture_output=True, text=True, cwd=PROJ)
+    mm = re.search(r"Found (\d+) errors", r.stderr or r.stdout)
+    cur = int(mm.group(1)) if mm else -1
+    check("ruff <= baseline 31", 0 <= cur <= 31, f"found {cur}")
+
+    print()
+    print("FAILED:" if fails else "ALL PASSED",
+          fails if fails else "(ad-hoc verification, not a suite)")
+    return 1 if fails else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
