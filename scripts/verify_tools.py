@@ -24,7 +24,7 @@ def check(name, cond, detail=""):
 
 
 def main():
-    from app.tools import REPAIR_TOOLS, _install_loader
+    from app.tools import REPAIR_TOOLS, _install_loader, _speedup_startgame
 
     asset = os.path.join(PROJ, "assets", "Loader_opt23.exe")
     asset_sz = os.path.getsize(asset)
@@ -67,6 +67,30 @@ def main():
     with open(asset, "rb") as f:
         want = f.read()
     check("content now optimized", cur == want)
+
+    # --- 启动提速: timeout 10 → 2, CRLF 保留, 备份, 幂等 ---
+    bat = os.path.join(tmp, "startgame.bat")
+    crlf_content = b"@ECHO OFF\r\ntimeout /t 10 /nobreak\r\nstart Loader.exe\r\n"
+    with open(bat, "wb") as f:
+        f.write(crlf_content)
+    res.clear()
+    _speedup_startgame(tmp, lambda ok, m: res.append((ok, m)))
+    check("speedup ok (10s -> 2s)", res and res[-1][0] and "2s" in res[-1][1])
+    with open(bat, "rb") as f:
+        new_bat = f.read()
+    check("timeout now 2", b"timeout /t 2" in new_bat)
+    check("CRLF preserved", new_bat.count(b"\r\n") == 3 and b"\r\ntimeout" in new_bat)
+    check("other lines intact", b"start Loader.exe" in new_bat)
+    baks = [f for f in os.listdir(tmp) if "startgame.bat.bak" in f]
+    check("bat backup created", len(baks) == 1, str(baks))
+    res.clear()
+    _speedup_startgame(tmp, lambda ok, m: res.append((ok, m)))
+    check("speedup idempotent", res and res[-1][0] and "已是快速启动" in res[-1][1])
+    with open(bat, "wb") as f:
+        f.write(b"@ECHO OFF\r\nstart Loader.exe\r\n")
+    res.clear()
+    _speedup_startgame(tmp, lambda ok, m: res.append((ok, m)))
+    check("no timeout -> already fast", res and res[-1][0] and "无 timeout" in res[-1][1])
     shutil.rmtree(tmp)
 
     # --- 工具元数据 ---

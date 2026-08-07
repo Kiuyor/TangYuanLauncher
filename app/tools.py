@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -159,6 +160,51 @@ def _update_items(csgo_dir: str, on_done: Callable[[bool, str], None] | None = N
             on_done(False, f"更新失败: {e}")
 
 
+def _speedup_startgame(csgo_dir: str, on_done: Callable[[bool, str], None] | None = None):
+    """优化 startgame.bat: timeout 10s → 2s (启动提速 ~8s)。
+
+    字节级正则替换, 不重编码整个文件(保留原 CRLF/编码);
+    原件备份为 startgame.bat.bak_<时间戳>, 可手动还原。
+    """
+    bat = os.path.join(csgo_dir, "startgame.bat")
+    if not os.path.isfile(bat):
+        if on_done:
+            on_done(False, "未找到 startgame.bat(该目录可能用其他方式启动)")
+        return
+    try:
+        with open(bat, "rb") as f:
+            raw = f.read()
+    except OSError as e:
+        if on_done:
+            on_done(False, f"读取失败: {e}")
+        return
+    m = re.search(rb"timeout\s+/t\s+(\d+)", raw, re.IGNORECASE)
+    if not m:
+        if on_done:
+            on_done(True, "startgame.bat 无 timeout 行(已是快速启动)")
+        return
+    cur = int(m.group(1))
+    if cur <= 2:
+        if on_done:
+            on_done(True, f"startgame.bat 已是快速启动(timeout {cur}s)")
+        return
+    bak, err = _backup_file(csgo_dir, "startgame.bat")
+    if err:
+        if on_done:
+            on_done(False, err)
+        return
+    new_raw = re.sub(rb"timeout\s+/t\s+\d+", b"timeout /t 2", raw, flags=re.IGNORECASE)
+    try:
+        with open(bat, "wb") as f:
+            f.write(new_raw)
+        if on_done:
+            on_done(True, f"已优化 startgame.bat: timeout {cur}s → 2s\n"
+                          f"(原件备份: {os.path.basename(bak)}, 可手动还原)")
+    except OSError as e:
+        if on_done:
+            on_done(False, f"写入失败: {e}")
+
+
 REPAIR_TOOLS: list[RepairTool] = [
     RepairTool(
         name="清除武器皮肤缓存",
@@ -217,6 +263,17 @@ REPAIR_TOOLS: list[RepairTool] = [
         risk="低",
         confirm="将覆盖 platform\\items_730.bin(原名已备份),是否继续?",
         handler=_update_items,
+    ),
+    RepairTool(
+        name="启动提速 (startgame.bat)",
+        file=None,
+        category="启动优化",
+        desc="把 startgame.bat 的 timeout 10 秒降到 2 秒,每次启动快约 8 秒。"
+             "banner 信息保留可读。原件自动备份,可手动还原。",
+        action="备份并修改 startgame.bat 的 timeout 行 (10s → 2s)",
+        risk="低",
+        confirm="将修改游戏目录的 startgame.bat(原件已备份),是否继续?",
+        handler=_speedup_startgame,
     ),
 ]
 
