@@ -32,18 +32,21 @@ def main():
     # --- 模拟游戏目录: 原件 Loader/revLoader 必须保持不动 ---
     tmp = tempfile.mkdtemp()
     orig = b"Y" * 34816
-    open(os.path.join(tmp, "Loader.exe"), "wb").write(orig)
-    open(os.path.join(tmp, "revLoader.exe"), "wb").write(orig)
+    for fn in ("Loader.exe", "revLoader.exe"):
+        with open(os.path.join(tmp, fn), "wb") as f:
+            f.write(orig)
 
     res = []
     _install_loader(tmp, lambda ok, m: res.append((ok, m)))
     check("install ok", res and res[-1][0], str(res[-1] if res else None))
     check("newloader.exe created w/ optimized size",
           os.path.getsize(os.path.join(tmp, "newloader.exe")) == asset_sz)
-    check("Loader.exe untouched",
-          open(os.path.join(tmp, "Loader.exe"), "rb").read() == orig)
-    check("revLoader.exe untouched",
-          open(os.path.join(tmp, "revLoader.exe"), "rb").read() == orig)
+    with open(os.path.join(tmp, "Loader.exe"), "rb") as f:
+        loader_orig = f.read()
+    check("Loader.exe untouched", loader_orig == orig)
+    with open(os.path.join(tmp, "revLoader.exe"), "rb") as f:
+        rev_orig = f.read()
+    check("revLoader.exe untouched", rev_orig == orig)
     check("no backup files", not [f for f in os.listdir(tmp) if "bak" in f])
 
     res.clear()
@@ -53,12 +56,14 @@ def main():
     shutil.rmtree(tmp)
 
     # --- 工具元数据 ---
-    t = [t for t in REPAIR_TOOLS if t.name.startswith("安装优化")][0]
-    check("risk=低", t.risk == "低")
+    t = next((t for t in REPAIR_TOOLS if t.name.startswith("安装优化")), None)
+    check("loader tool found", t is not None)
+    check("risk=低", t is not None and t.risk == "低")
     check("desc mentions newloader.exe", "newloader.exe" in t.desc)
 
     # --- 启动优先逻辑 (闭包不易单测, 静态确认 + 导入) ---
-    src = open(os.path.join(PROJ, "flet_app", "main.py"), encoding="utf-8").read()
+    with open(os.path.join(PROJ, "flet_app", "main.py"), encoding="utf-8") as f:
+        src = f.read()
     check("launch prefers newloader.exe",
           'os.path.isfile(os.path.join(d, "newloader.exe"))' in src)
     check("Popen uses loader_exe", "subprocess.Popen([loader_exe]" in src)
@@ -68,7 +73,7 @@ def main():
 
     # --- ruff 基线 (原版两文件 31, 不允许新增) ---
     r = subprocess.run([sys.executable, "-m", "ruff", "check", "app/tools.py", "flet_app/main.py"],
-                       capture_output=True, text=True, cwd=PROJ)
+                       capture_output=True, text=True, cwd=PROJ, check=False)
     mm = re.search(r"Found (\d+) errors", r.stderr or r.stdout)
     cur = int(mm.group(1)) if mm else -1
     check("ruff <= baseline 31", 0 <= cur <= 31, f"found {cur}")
