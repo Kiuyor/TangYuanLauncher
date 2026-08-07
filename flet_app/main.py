@@ -1064,12 +1064,17 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             page.update()
             return
         d = st["csgo_dir"] or find_csgo_dir() or ""
-        if not d or not os.path.isfile(os.path.join(d, "Loader.exe")):
-            show_home_error("未定位 Loader.exe, 请先在配置页指定目录")
+        # 优先优化版 newloader.exe, 回退原版 Loader.exe (2026-08: 工具安装不覆盖原件)
+        loader_exe = (os.path.join(d, "newloader.exe")
+                      if d and os.path.isfile(os.path.join(d, "newloader.exe"))
+                      else os.path.join(d, "Loader.exe"))
+        loader_name = os.path.basename(loader_exe)
+        if not d or not os.path.isfile(loader_exe):
+            show_home_error(f"未定位 {loader_name}, 请先在配置页指定目录")
             return
-        # Loader 已在运行 (启动窗口期/挂起残留): 拒绝二次 Popen, 显示等待提示而非假\"已启动 ✓\" (R4)
-        if _proc_exists("Loader.exe"):
-            show_home_error("Loader.exe 已在运行, 请稍候游戏启动")
+        # Loader 已在运行 (启动窗口期/挂起残留): 拒绝二次 Popen, 显示等待提示而非假"已启动 ✓" (R4)
+        if _proc_exists("Loader.exe") or _proc_exists("newloader.exe"):
+            show_home_error("Loader 已在运行, 请稍候游戏启动")
             return
         # 启动目标目录的 rev.ini 是身份/启动的事实来源 (R7/M3):
         # Loader.exe 在 cwd=d 下读取的是 csgo_dir/rev.ini, 外部打开的 ini_path
@@ -1092,20 +1097,20 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         except OSError:
             pass
         try:
-            subprocess.Popen([os.path.join(d, "Loader.exe")], cwd=d)
+            subprocess.Popen([loader_exe], cwd=d)
         except OSError as e:
             if getattr(e, "winerror", None) == 740:
-                # Loader.exe 需要管理员权限 (requireAdministrator manifest):
+                # Loader 需要管理员权限 (requireAdministrator manifest):
                 # ShellExecuteW runas verb 提权启动, 弹出 UAC 确认 (R1)
                 try:
                     import ctypes
                     res = ctypes.windll.shell32.ShellExecuteW(
-                        None, "runas", os.path.join(d, "Loader.exe"), "", d, 1)
+                        None, "runas", loader_exe, "", d, 1)
                 except Exception:
                     res = 0
                 if res <= 32:
                     _procname_restore(ini, proc_orig)
-                    show_home_error("Loader.exe 需要管理员权限, 请在 UAC 弹窗中确认")
+                    show_home_error(f"{loader_name} 需要管理员权限, 请在 UAC 弹窗中确认")
                     return
                 # 提权拉起成功, fall through 到统一轮询
             else:

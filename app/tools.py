@@ -85,43 +85,27 @@ def _clean_reg_leftover(csgo_dir: str, on_done: Callable[[bool, str], None] | No
 
 
 def _install_loader(csgo_dir: str, on_done: Callable[[bool, str], None] | None = None):
-    """替换 Loader.exe 为优化版(原件备份为 Loader.exe.orig_<时间戳>)。
+    """安装优化版 Loader 为 newloader.exe(不覆盖原件, 零风险)。
 
-    启动链(startgame.bat / 应用启动按钮)固定调用 Loader.exe,
-    并存文件不会被使用, 必须替换同名文件才生效。
-    revLoader.exe 是 Loader.exe 的相同副本(同 MD5), 一并替换。
+    启动链(应用启动按钮)优先使用 newloader.exe, 原件 Loader.exe
+    保持不动; 想回退直接删除 newloader.exe 即可。
     """
     src = os.path.join(ASSETS_DIR, ASSET_LOADER)
     if not os.path.isfile(src):
         if on_done:
             on_done(False, f"缺少内置资源: assets\\{ASSET_LOADER}(请确认项目完整)")
         return
-    target = os.path.join(csgo_dir, "Loader.exe")
-    # 幂等: Loader.exe 已是优化版(优化版 154KB vs 原件 34KB, 大小可区分)
+    target = os.path.join(csgo_dir, "newloader.exe")
     if os.path.isfile(target) and os.path.getsize(target) == os.path.getsize(src):
         if on_done:
-            on_done(True, "Loader.exe 已是优化版(无需重复安装)")
-        return
-    if not os.path.isfile(target):
-        if on_done:
-            on_done(False, "未找到 Loader.exe, 请确认游戏目录正确")
-        return
-    bak, err = _backup_file(csgo_dir, "Loader.exe")
-    if err:
-        if on_done:
-            on_done(False, err)
+            on_done(True, "newloader.exe 已安装(无需重复安装)")
         return
     try:
         shutil.copy2(src, target)
-        msgs = [f"已替换 Loader.exe\n(原件备份: {os.path.basename(bak)})"]
-        # revLoader.exe 与 Loader.exe 同源(同 MD5), 同步替换保持一致
-        rev = os.path.join(csgo_dir, "revLoader.exe")
-        if os.path.isfile(rev):
-            shutil.copy2(src, rev)
-            msgs.append("revLoader.exe 已同步替换")
-        msgs.append("startgame.bat / 应用启动按钮将自动使用优化版")
         if on_done:
-            on_done(True, "\n".join(msgs))
+            on_done(True, "已安装 newloader.exe\n"
+                          "(原件 Loader.exe 未动; 应用启动按钮将优先使用它)\n"
+                          "回退方式: 直接删除 newloader.exe")
     except OSError as e:
         if on_done:
             on_done(False, f"安装失败: {e}")
@@ -205,13 +189,12 @@ REPAIR_TOOLS: List[RepairTool] = [
         name="安装优化 Loader (免残留)",
         file=None,
         category="Loader",
-        desc="替换 Loader.exe 为优化版(原件自动备份)。"
-             "启动器固定调用 Loader.exe, 替换后自动生效;"
-             "游戏退出后自动清理注册表, 防止残留污染。"
-             "revLoader.exe(同源副本)一并替换。",
-        action="备份 Loader.exe 并替换为优化版(revLoader.exe 同步)",
-        risk="中",
-        confirm="将替换游戏目录的 Loader.exe(原件已备份, 可还原),是否继续?",
+        desc="安装优化版 Loader 为 newloader.exe, 不覆盖原件(零风险)。"
+             "应用启动按钮优先使用它; 游戏退出后自动清理注册表,"
+             "防止残留污染。回退: 直接删除 newloader.exe。",
+        action="复制优化版 Loader 为游戏目录下的 newloader.exe",
+        risk="低",
+        confirm="将安装 newloader.exe 到游戏目录(原件 Loader.exe 不动),是否继续?",
         handler=_install_loader,
     ),
     RepairTool(
