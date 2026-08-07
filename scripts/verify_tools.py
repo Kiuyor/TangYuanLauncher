@@ -53,6 +53,20 @@ def main():
     _install_loader(tmp, lambda ok, m: res.append((ok, m)))
     check("idempotent", res and res[-1][0] and "无需重复安装" in res[-1][1])
     check("still 3 files", len(os.listdir(tmp)) == 3, str(os.listdir(tmp)))
+
+    # --- 同大小不同内容 → 应覆盖 (旧版大小比较会误判跳过, MD5 修复) ---
+    fake = b"Z" * asset_sz
+    with open(os.path.join(tmp, "newloader.exe"), "wb") as f:
+        f.write(fake)
+    res.clear()
+    _install_loader(tmp, lambda ok, m: res.append((ok, m)))
+    check("same-size diff-content -> replaced",
+          res and res[-1][0] and "已安装 newloader.exe" in res[-1][1])
+    with open(os.path.join(tmp, "newloader.exe"), "rb") as f:
+        cur = f.read()
+    with open(asset, "rb") as f:
+        want = f.read()
+    check("content now optimized", cur == want)
     shutil.rmtree(tmp)
 
     # --- 工具元数据 ---

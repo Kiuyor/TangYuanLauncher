@@ -1,15 +1,15 @@
-# -*- coding: utf-8 -*-
 """修复工具:CS:GO 目录内置维护脚本的一键运行入口"""
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
 import sys
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, List, Optional
 
 # 内置资源目录 (Loader 优化版 / 扩展版物品库)
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
@@ -84,6 +84,15 @@ def _clean_reg_leftover(csgo_dir: str, on_done: Callable[[bool, str], None] | No
         on_done(True, msg)
 
 
+def _file_md5(path: str) -> str:
+    """文件 MD5(小文件一次性读入, <1ms); 读取失败返回空串(按"未安装"处理)"""
+    try:
+        with open(path, "rb") as f:
+            return hashlib.md5(f.read()).hexdigest()
+    except OSError:
+        return ""
+
+
 def _install_loader(csgo_dir: str, on_done: Callable[[bool, str], None] | None = None):
     """安装优化版 Loader 为 newloader.exe(不覆盖原件, 零风险)。
 
@@ -96,7 +105,8 @@ def _install_loader(csgo_dir: str, on_done: Callable[[bool, str], None] | None =
             on_done(False, f"缺少内置资源: assets\\{ASSET_LOADER}(请确认项目完整)")
         return
     target = os.path.join(csgo_dir, "newloader.exe")
-    if os.path.isfile(target) and os.path.getsize(target) == os.path.getsize(src):
+    # 幂等: MD5 内容比较(大小撞车可能误判, 2026-08 拷问 A1 定稿)
+    if os.path.isfile(target) and _file_md5(target) == _file_md5(src):
         if on_done:
             on_done(True, "newloader.exe 已安装(无需重复安装)")
         return
@@ -149,7 +159,7 @@ def _update_items(csgo_dir: str, on_done: Callable[[bool, str], None] | None = N
             on_done(False, f"更新失败: {e}")
 
 
-REPAIR_TOOLS: List[RepairTool] = [
+REPAIR_TOOLS: list[RepairTool] = [
     RepairTool(
         name="清除武器皮肤缓存",
         file="cleancache.bat",
@@ -284,7 +294,7 @@ def run_tool(csgo_dir: str, tool: RepairTool,
     return True
 
 
-def _to_text(b: Optional[bytes]) -> str:
+def _to_text(b: bytes | None) -> str:
     """字节输出解码: UTF-8 优先, 坏字节替换(与旧行为一致, GBK 输出不崩溃)"""
     return (b or b"").decode("utf-8", errors="replace")
 
