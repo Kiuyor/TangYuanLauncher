@@ -3,12 +3,14 @@
 优先级:
 1. 注册表卸载信息 (Nosteam CSGO 的 InstallLocation)
 2. 注册表 DisplayIcon 推导
-3. 当前工作目录 / 脚本所在目录
-4. 常见安装路径
+3. 启动器 exe 同级 game\\ 子目录 (v2.0.0 内嵌游戏版)
+4. 当前工作目录 / 脚本所在目录
+5. 常见安装路径
 """
 from __future__ import annotations
 
 import os
+import sys
 
 try:
     import winreg
@@ -89,6 +91,27 @@ def _common_dirs() -> list:
                       f"{drive}\\Games\\CSGO")]
 
 
+def _exe_sibling_game_dirs() -> list:
+    """启动器 exe 同级 game\\ 子目录候选 (v2.0.0 内嵌游戏版)。
+
+    Nuitka 目录版: 安装器把游戏装为 exe 旁的 game\\, 两者平级;
+    开发版: __file__ 位于 revini-editor/app/, 向上两级即仓库根, game\\ 若存在同样生效。
+    """
+    if getattr(sys, "frozen", False):
+        base = os.path.dirname(sys.executable)
+    else:
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return [os.path.join(base, "game")]
+
+
+def _is_game_subdir(path: str) -> bool:
+    """内嵌 game\\ 目录判定: 含 rev.ini / csgo.exe / Loader.exe 任一即视为游戏根目录"""
+    if not path or not os.path.isdir(path):
+        return False
+    return any(os.path.exists(os.path.join(path, name))
+               for name in ("rev.ini", "csgo.exe", "Loader.exe"))
+
+
 def find_csgo_dir() -> str | None:
     """自动定位 CS:GO 安装目录,找不到返回 None。
     注册表访问在权限受限/重定向环境下可能抛异常,整体兜底保证永不崩溃。"""
@@ -122,13 +145,18 @@ def _find_csgo_dir_impl() -> str | None:
                         if ico_dir:
                             candidates.append(ico_dir)
 
-    # 2. 当前工作目录 / 脚本位置
+    # 2. 启动器 exe 同级 game\\ 子目录 (v2.0.0 内嵌游戏版)
+    for g in _exe_sibling_game_dirs():
+        if _is_game_subdir(g):
+            return g
+
+    # 3. 当前工作目录 / 脚本位置
     candidates.append(os.getcwd())
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # revini-editor/
     candidates.append(here)
     candidates.append(os.path.dirname(here))
 
-    # 3. 常见安装路径(不含 Steam 目录)
+    # 4. 常见安装路径(不含 Steam 目录)
     candidates.extend(_common_dirs())
 
     # 去重并验证

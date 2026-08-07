@@ -185,6 +185,9 @@ FIELD_GROUPS = [
         "icon_key": "tune",
         "desc": "游戏内昵称、段位伪装、界面语言与头像显示 · 保存后自动备份 · 重启游戏生效",
         "fields": [
+            text_field("Loader", "ConnectServer", "自动进入服务器",
+                       "启动游戏后自动连接该服务器(留空则不自动进服)。格式 IP:端口, 如 127.0.0.1:27015",
+                       "", 32, "如: 127.0.0.1:27015"),
             text_field("steamclient", "PlayerName", "游戏昵称",
                        "显示在游戏内与服务器列表中的名字", "Player", 32, "输入你的昵称"),
             text_field("steamclient", "ClanTag", "战队标签",
@@ -226,9 +229,6 @@ FIELD_GROUPS = [
                                 "label": "128 tick 参数",
                                 "tip": "设置服务器/客户端 128 tick"},
                            ]),
-            text_field("Loader", "ConnectServer", "自动进入服务器",
-                       "启动游戏后自动连接该服务器(留空则不自动进服)。格式 IP:端口, 如 127.0.0.1:27015",
-                       "", 32, "如: 127.0.0.1:27015"),
         ],
     },
     {

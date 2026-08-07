@@ -1,5 +1,5 @@
 @echo off
-rem Nuitka directory build - TangYuan Launcher v1.0.1
+rem Nuitka directory build - TangYuan Launcher v2.0.0
 rem Usage: double-click or run from cmd
 rem Output: build\nuitka\main.dist\  (copy engine + zip by make_dist.py)
 setlocal
@@ -15,8 +15,8 @@ set "FLET_ENGINE=%USERPROFILE%\.flet\client\flet-desktop-full-0.86.5\flet"
   --windows-product-name="TangYuanLauncher" ^
   --windows-company-name="RevIniEditor" ^
   --windows-file-description="CS:GO rev.ini config tool" ^
-  --windows-file-version=1.0.1.0 ^
-  --windows-product-version=1.0.1.0 ^
+  --windows-file-version=2.0.0.0 ^
+  --windows-product-version=2.0.0.0 ^
   --include-package=flet ^
   --include-package=flet_desktop ^
   --include-package-data=flet ^
@@ -42,7 +42,14 @@ if not exist "build\nuitka\main.dist\engine\flet.exe" (
   pause
   exit /b 1
 )
-echo [OK] build done: build\nuitka\main.dist\RevIniEditor.exe + engine
+rem Window icon: launcher main.py looks for icon.ico beside the exe (taskbar/Alt+Tab)
+copy /y "packaging\assets\revini.ico" "build\nuitka\main.dist\icon.ico" >nul
+if not exist "build\nuitka\main.dist\icon.ico" (
+  echo [ERROR] icon copy failed
+  pause
+  exit /b 1
+)
+echo [OK] build done: build\nuitka\main.dist\RevIniEditor.exe + engine + icon.ico
 echo [OK] next: "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\installer.iss
 pause
 endlocal
