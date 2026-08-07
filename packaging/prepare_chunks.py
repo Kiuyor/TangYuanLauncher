@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 import sys
@@ -19,6 +20,9 @@ import time
 SEVENZ = r"D:\7-Zip\7z.exe"
 TARGET_CHUNK_MB = 1200
 CHUNK_BYTES = TARGET_CHUNK_MB * 1024 * 1024
+# 扩展皮肤库源 (revini-editor 仓库 assets/; 已提交 git)
+EXT_ITEMS_BIN = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "assets", "items_730.bin")
 
 PATCHES = [
     # (相对路径, 旧字节, 新字节, 幂等判定字节)
@@ -28,6 +32,13 @@ PATCHES = [
     ("rev.ini",
      b"Language = English", b"Language = schinese",
      b"Language = schinese"),
+]
+
+# 整文件替换补丁 (原版 -> 增强版; 幂等 = md5 已为目标)
+FILE_REPLACEMENTS = [
+    # (相对路径, 源文件, 目标 md5)
+    ("platform\\items_730.bin", EXT_ITEMS_BIN,
+     "0cfbf18a567f2ab1df95669102198096"),
 ]
 
 
@@ -51,6 +62,31 @@ def apply_patch(game_dir: str, rel: str, old: bytes, new: bytes, done_marker: by
     with open(p, "wb") as f:
         f.write(data.replace(old, new))
     print(f"  [patched] {rel}: {old!r} -> {new!r} (备份 {os.path.basename(bak)})")
+    return True
+
+
+def apply_file_replacement(game_dir: str, rel: str, src: str, expect_md5: str) -> bool:
+    """整文件替换: 原版 -> 增强版; 幂等(目标 md5 已匹配跳过); 改前备份 .bak_<ts>。返回是否改动。"""
+    p = os.path.join(game_dir, rel)
+    if not os.path.isfile(p):
+        print(f"  [skip] {rel}: 不存在")
+        return False
+    with open(p, "rb") as f:
+        cur = f.read()
+    if hashlib.md5(cur).hexdigest() == expect_md5:
+        print(f"  [skip] {rel}: 已是目标版本")
+        return False
+    if not os.path.isfile(src):
+        print(f"  [skip] {rel}: 源文件缺失 {src}")
+        return False
+    with open(src, "rb") as f:
+        new = f.read()
+    bak = p + ".bak_" + time.strftime("%Y%m%d%H%M%S")
+    with open(bak, "wb") as f:
+        f.write(cur)
+    with open(p, "wb") as f:
+        f.write(new)
+    print(f"  [replaced] {rel}: {len(cur)}B -> {len(new)}B (备份 {os.path.basename(bak)})")
     return True
 
 
@@ -107,6 +143,8 @@ def main() -> None:
     print(f"== 1/3 游戏补丁: {game_dir}")
     for rel, old, new, marker in PATCHES:
         apply_patch(game_dir, rel, old, new, marker)
+    for rel, src, md5 in FILE_REPLACEMENTS:
+        apply_file_replacement(game_dir, rel, src, md5)
     print(f"== 2/3 收集文件清单")
     files = collect_files(game_dir)
     total = sum(s for _, s in files)
