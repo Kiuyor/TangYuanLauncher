@@ -5,7 +5,6 @@
 覆盖: newloader.exe 安装(不覆盖原件/幂等) / 工具元数据 / 启动优先逻辑 / ruff 基线
 """
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -109,12 +108,13 @@ def main():
     import flet_app.main  # noqa: F401 - 模块级导入即冒烟
     check("flet_app.main imports", True)
 
-    # --- ruff 基线 (原版两文件 31, 不允许新增) ---
-    r = subprocess.run([sys.executable, "-m", "ruff", "check", "app/tools.py", "flet_app/main.py"],
+    # --- ruff: 全库 0 错误 (质量门, 2026-08 审计清零后由"基线 31"收紧) ---
+    r = subprocess.run([sys.executable, "-m", "ruff", "check",
+                        "app", "flet_app", "main.py", "scripts"],
                        capture_output=True, text=True, cwd=PROJ, check=False)
-    mm = re.search(r"Found (\d+) errors", r.stderr or r.stdout)
-    cur = int(mm.group(1)) if mm else -1
-    check("ruff <= baseline 31", 0 <= cur <= 31, f"found {cur}")
+    out = r.stdout + r.stderr
+    check("ruff 全库 0 错误", r.returncode == 0 and "All checks passed" in out,
+          out.strip().splitlines()[-1] if out.strip() else "EMPTY")
 
     print()
     print("FAILED:" if fails else "ALL PASSED",

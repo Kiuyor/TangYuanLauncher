@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 rev.ini 字段定义(UI 表现层数据)
 - 与 ini_model.py 分离: 模型只管解析/序列化, 字段定义描述"界面上要展示哪些配置项"
@@ -9,8 +8,9 @@ rev.ini 字段定义(UI 表现层数据)
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dc_field
-from typing import Any, Optional
+from dataclasses import dataclass
+from dataclasses import field as dc_field
+from typing import Any
 
 # ---------- 类型安全字段定义 (dataclass, schema 唯一来源) ----------
 
@@ -29,7 +29,7 @@ class FieldDef:
     hi: int = 0              # int
     suffix: str = ""         # int
     items: list = dc_field(default_factory=list)       # combo
-    display_map: Optional[dict] = None                 # combo
+    display_map: dict | None = None                 # combo
     chips: list = dc_field(default_factory=list)       # textarea
 
     def to_dict(self) -> dict:

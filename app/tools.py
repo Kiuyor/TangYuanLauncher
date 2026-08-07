@@ -140,7 +140,8 @@ def _update_items(csgo_dir: str, on_done: Callable[[bool, str], None] | None = N
             on_done(False, f"未找到 platform 目录: {target_dir}(不是标准 CS:GO 安装?)")
         return
     cur_sz = os.path.getsize(target) if os.path.isfile(target) else 0
-    if cur_sz == os.path.getsize(src):
+    # 幂等: MD5 内容比较(大小相同但内容不同会误判, 与 _install_loader 同策略)
+    if os.path.isfile(target) and _file_md5(target) == _file_md5(src):
         if on_done:
             on_done(True, "items_730.bin 已是扩展版(无需更新)")
         return
@@ -296,6 +297,7 @@ def run_tool(csgo_dir: str, tool: RepairTool,
     """异步运行修复工具,不阻塞 UI。
 
     - handler 工具(python 内置): 直接后台线程执行 handler(csgo_dir, on_done)
+      (超时机制仅对脚本工具生效; python 内置工具为快速操作, 不受 timeout 控制)
     - 脚本工具(bat): 要求脚本存在于 csgo_dir, 执行后回调结果
     - 脚本不存在/无法启动: 返回 False(调用方可立即提示)
     - 启动成功: 返回 True,后台线程执行完毕后回调
@@ -363,7 +365,7 @@ def _kill_process_tree(proc) -> None:
     if sys.platform == "win32":
         try:
             r = subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                               capture_output=True, timeout=10)
+                               capture_output=True, timeout=10, check=False)
             if r.returncode == 0:
                 return
             # taskkill 失败 (进程已退出/权限不足): 继续走 proc.kill() 兜底

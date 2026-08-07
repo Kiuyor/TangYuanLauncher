@@ -4,16 +4,26 @@
 设计定稿见 skill: flet-desktop-apps → references/revini-editor-launcher-redesign.md
 实施计划见: plan.md
 """
-import flet as ft
-import sys, os, threading, subprocess, asyncio, time
+import asyncio
+import os
+import subprocess
+import sys
+import threading
+import time
 from datetime import datetime
+
+import flet as ft
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import VERSION
+from app.fields import (
+    FIELD_GROUPS,
+    RANK_DISPLAY,
+    rank_level_to_name,
+    rank_name_to_level,
+)
 from app.ini_model import RevIni, default_ini_text
-from app.fields import (FIELD_GROUPS, RANK_DISPLAY, rank_level_to_name,
-                        rank_name_to_level)
-from app.locator import locate_rev_ini, find_csgo_dir, find_cfg_dir
+from app.locator import find_cfg_dir, find_csgo_dir, locate_rev_ini
 from app.settings import set_user_csgo_dir
 
 # ==================== 汤圆启动器主题色板 ====================
@@ -66,11 +76,20 @@ def _procname_patch(ini_path, new_value):
     if not nv:
         return None
     try:
-        raw = open(ini_path, "rb").read()
+        with open(ini_path, "rb") as f:
+            raw = f.read()
     except OSError:
         return None
     low = raw.lower()
     li = low.find(b"[loader]")
+    while li >= 0:
+        ls0 = low.rfind(b"\n", 0, li) + 1
+        le0 = low.find(b"\n", li)
+        if le0 < 0:
+            le0 = len(low)
+        if low[ls0:li].strip() == b"" and low[li:le0].strip() == b"[loader]":
+            break   # 找到真正的 section 头行
+        li = low.find(b"[loader]", li + 1)   # 注释/值里的误匹配, 继续找
     if li < 0:
         return None
     sec_end = low.find(b"[", li + 8)
@@ -96,7 +115,8 @@ def _procname_patch(ini_path, new_value):
     if line.endswith(b"\r"):   # CRLF 文件: 保留行尾 \r, 避免中间态混行尾
         new_line += b"\r"
     try:
-        open(ini_path, "wb").write(raw[:ls] + new_line + raw[le:])
+        with open(ini_path, "wb") as f:
+            f.write(raw[:ls] + new_line + raw[le:])
     except OSError:
         return None
     return line
@@ -109,11 +129,20 @@ def _procname_restore(ini_path, orig_line):
     if not orig_line:
         return
     try:
-        raw = open(ini_path, "rb").read()
+        with open(ini_path, "rb") as f:
+            raw = f.read()
     except OSError:
         return
     low = raw.lower()
     li = low.find(b"[loader]")
+    while li >= 0:
+        ls0 = low.rfind(b"\n", 0, li) + 1
+        le0 = low.find(b"\n", li)
+        if le0 < 0:
+            le0 = len(low)
+        if low[ls0:li].strip() == b"" and low[li:le0].strip() == b"[loader]":
+            break   # 找到真正的 section 头行
+        li = low.find(b"[loader]", li + 1)   # 注释/值里的误匹配, 继续找
     if li < 0:
         return
     sec_end = low.find(b"[", li + 8)
@@ -127,7 +156,8 @@ def _procname_restore(ini_path, orig_line):
     if le < 0:
         le = len(raw)
     try:
-        open(ini_path, "wb").write(raw[:ls] + orig_line + raw[le:])
+        with open(ini_path, "wb") as f:
+            f.write(raw[:ls] + orig_line + raw[le:])
     except OSError:
         pass
 
@@ -141,7 +171,7 @@ def _screen_center():
         sw = ctypes.windll.user32.GetSystemMetrics(0)   # SM_CXSCREEN
         sh = ctypes.windll.user32.GetSystemMetrics(1)   # SM_CYSCREEN
         return sw / 2, sh / 2
-    except Exception:
+    except Exception:  # noqa: BLE001 - ctypes 调用兜底, 失败退化为保持原中心
         return None
 
 
@@ -284,14 +314,14 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 ["powershell", "-NoProfile", "-STA", "-Command", ps_code],
                 capture_output=True, text=True, timeout=300,
                 encoding="utf-8",   # ps_code 已设 OutputEncoding=UTF8, 与环境 fsencoding 无关
-                creationflags=subprocess.CREATE_NO_WINDOW)   # GUI 子系统下不闪控制台 (2026-08)
+                creationflags=subprocess.CREATE_NO_WINDOW, check=False)   # GUI 子系统下不闪控制台 (2026-08)
             out = r.stdout.strip()
             return out if out else ""
         except subprocess.TimeoutExpired:
             # 对话框被超时终止: 明确提示, 不再静默吞掉用户选择
             set_status("DIALOG TIMEOUT // 对话框超时(5 分钟),请重试", err=True)
             return ""
-        except Exception:
+        except Exception:  # noqa: BLE001 - 对话框调用兜底, 失败返回空选择
             return ""
 
     def pick_open():
@@ -472,10 +502,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         st["loaded_name"] = os.path.basename(path)
         path_chip.value = st["loaded_name"]
         path_chip.tooltip = path
-        if enc_selector:
-            if model.source_encoding in ("gbk", "utf-8"):
-                enc_selector.selected = [model.source_encoding]
-                st["enc"] = model.source_encoding
+        if enc_selector and model.source_encoding in ("gbk", "utf-8"):
+            enc_selector.selected = [model.source_encoding]
+            st["enc"] = model.source_encoding
         populate_all()
         refresh_dir()
         update_title()
@@ -485,7 +514,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             set_status(f"LOADED // {st['loaded_name']}", ok=True)
         return True
 
-    def on_save(e=None):
+    def on_save(_=None):
         if not st["ini_path"]:
             pick_save()
             return
@@ -500,7 +529,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             return
         st["dirty"] = False
         update_title()
-        stamp = datetime.now().strftime("%H:%M:%S")
+        stamp = datetime.now().astimezone().strftime("%H:%M:%S")
         enc_label = "ANSI" if enc == "gbk" else "UTF-8"
         set_status(f"SAVED // {st['loaded_name']} [{enc_label}] @ {stamp}" +
                    ("  ·  BACKUP" if bak else ""), ok=True)
@@ -606,13 +635,12 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                     e.control.update()
                     return
                 lo, hi = field.get("lo") or 0, field.get("hi") or 0
-                if lo or hi:
-                    if not (lo <= iv <= hi):
-                        vr["bad"] = True
-                        e.control.error_text = f"范围 {lo}~{hi}"
-                        mark_dirty()
-                        e.control.update()
-                        return
+                if (lo or hi) and not (lo <= iv <= hi):
+                    vr["bad"] = True
+                    e.control.error_text = f"范围 {lo}~{hi}"
+                    mark_dirty()
+                    e.control.update()
+                    return
                 vr["v"] = iv
                 vr["bad"] = False
                 e.control.error_text = None
@@ -632,10 +660,18 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             # 推荐参数 chips: 点击 toggle 添加/移除; 已添加的 chip 变淡金底+对勾
             # (避免重复添加, 视觉审计 2026-08)
             chip_refs = []
+            def _args_in_cur(args, cur):
+                """chip 参数是否已存在: 按空白分词后集合比较(子串匹配会误判 -high vs -highp)"""
+                return set(args.split()) <= set(cur.split())
+
+            def _remove_args(args, cur):
+                """按 token 移除 chip 参数, 保留其余参数顺序"""
+                remove = set(args.split())
+                return " ".join(t for t in cur.split() if t not in remove)
             def _sync_chips():
                 cur = ta.value or ""
                 for cdef, chip in chip_refs:
-                    added = cdef.get("args", "").strip() in cur
+                    added = _args_in_cur(cdef.get("args", "").strip(), cur)
                     chip.bgcolor = CHIP_ADDED_BG if added else None
                     chip.label = ft.Text(("✓ " if added else "") + cdef["label"],
                                          size=12, color=ON_BRAND if added else None)
@@ -646,9 +682,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 def on_chip(_=None):
                     args = c.get("args", "").strip()
                     cur = ta.value.strip()
-                    if args in cur:
+                    if _args_in_cur(args, cur):
                         # 移除
-                        ta.value = cur.replace(args, "").replace("  ", " ").strip()
+                        ta.value = _remove_args(args, cur)
                     else:
                         # 追加 (单空格分隔)
                         ta.value = (cur + " " + args).strip() if cur else args
@@ -876,14 +912,14 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         # 先清掉可能开着的其它对话框 (F6 目录确认等), 避免确认框叠加上层挡死下层
         try:
             page.pop_dialog()
-        except Exception:
+        except Exception:  # noqa: BLE001, S110 - 弹框清理兜底, 失败静默
             pass
         page.update()
 
         def _do_close():
             try:
                 page.pop_dialog()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 - 弹框清理兜底, 失败静默
                 pass
             page.update()
             asyncio.create_task(page.window.destroy())
@@ -1027,9 +1063,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         try:
             r = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {name}"],
                                capture_output=True, timeout=5,
-                               creationflags=subprocess.CREATE_NO_WINDOW)
+                               creationflags=subprocess.CREATE_NO_WINDOW, check=False)
             return name.lower() in r.stdout.decode("gbk", errors="replace").lower()
-        except Exception:
+        except Exception:  # noqa: BLE001 - tasklist 调用兜底, 失败视为不存在
             return False
 
     def csgo_running():
@@ -1039,9 +1075,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             # 用 bytes + 显式 gbk+replace: 环境无关, csgo.exe 为 ASCII 不受影响。
             r = subprocess.run(["tasklist", "/FI", "IMAGENAME eq csgo.exe"],
                                capture_output=True, timeout=5,
-                               creationflags=subprocess.CREATE_NO_WINDOW)
+                               creationflags=subprocess.CREATE_NO_WINDOW, check=False)
             return "csgo.exe" in r.stdout.decode("gbk", errors="replace").lower()
-        except Exception:
+        except Exception:  # noqa: BLE001 - tasklist 调用兜底, 失败视为不存在
             return False
 
     launch_icon = ft.Icon(ft.Icons.ROCKET_LAUNCH, size=18, color=ON_BRAND)
@@ -1106,7 +1142,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                     import ctypes
                     res = ctypes.windll.shell32.ShellExecuteW(
                         None, "runas", loader_exe, "", d, 1)
-                except Exception:
+                except Exception:  # noqa: BLE001 - ShellExecuteW 调用兜底, 失败归入错误路径
                     res = 0
                 if res <= 32:
                     _procname_restore(ini, proc_orig)
@@ -1234,7 +1270,6 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         page.update()
 
     def show_editor():
-        nonlocal model
         if model is None and not load_state["loading"]:
             # 首次进入编辑页 lazy 加载 (仅当 enter_editor 的 _prep 未在加载时;
             # M2: 否则数据由 _prep 完成后的 run_thread 回调填充, 避免双加载/双 populate)
@@ -1322,7 +1357,6 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         load_state["loading"] = True
         def _prep():
             """工作线程: 只做 locate + RevIni.load(纯数据), 不碰任何 UI 控件 (H1/M2)"""
-            nonlocal model
             if model is not None:
                 return   # 已加载过: 防重复加载 (loading 标志是给 show_editor 看的)
             auto = locate_rev_ini()
@@ -1487,7 +1521,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                     page.window.left = s2[0] - WIN_HOME[0] / 2
                     page.window.top = s2[1] - WIN_HOME[1] / 2
                 page.update()
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 - 窗口字段兜底, 失败静默
                 pass
         page.run_thread(_do)
     threading.Thread(target=_settle_position, daemon=True).start()

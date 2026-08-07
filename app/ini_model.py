@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 rev.ini 解析 / 序列化模型
 - 保留注释、空行与原始格式(含行尾风格 CRLF/LF、键名大小写、= 两侧空白)
@@ -9,7 +8,6 @@ from __future__ import annotations
 import shutil
 import warnings
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple
 
 from . import VERSION
 
@@ -22,19 +20,19 @@ SUPPORTED_ENCODINGS = ("utf-8", "gbk")
 class RevIni:
     """rev.ini 配置模型,按行保留原始结构"""
 
-    lines: List[str] = field(default_factory=list)
+    lines: list[str] = field(default_factory=list)
     # (section_lower, key_lower) -> line_index
-    _index: Dict[Tuple[str, str], int] = field(default_factory=dict)
-    _section_lines: Dict[str, int] = field(default_factory=dict)  # section_lower -> 首个键行
-    _section_tail: Dict[str, int] = field(default_factory=dict)   # section_lower -> 末尾行
-    _section_keys: Dict[str, List[str]] = field(default_factory=dict)  # section_lower -> 键列表(文件序,去重)
+    _index: dict[tuple[str, str], int] = field(default_factory=dict)
+    _section_lines: dict[str, int] = field(default_factory=dict)  # section_lower -> 首个键行
+    _section_tail: dict[str, int] = field(default_factory=dict)   # section_lower -> 末尾行
+    _section_keys: dict[str, list[str]] = field(default_factory=dict)  # section_lower -> 键列表(文件序,去重)
     source_encoding: str = "utf-8"  # 读取时探测到的编码
     trailing_newline: bool = True   # 原文件是否以换行结尾(保存时还原,避免格式漂移)
     line_ending: str = "\n"         # 原文件行尾风格 ("\n" 或 "\r\n",保存时还原)
 
     # ---------- 解析 ----------
     @classmethod
-    def load(cls, path: str) -> "RevIni":
+    def load(cls, path: str) -> RevIni:
         with open(path, "rb") as f:
             data = f.read()
         text, enc = decode_ini_bytes(data)
@@ -43,7 +41,7 @@ class RevIni:
         return model
 
     @classmethod
-    def from_text(cls, text: str) -> "RevIni":
+    def from_text(cls, text: str) -> RevIni:
         model = cls()
         model.lines = text.splitlines()
         # 记录原始文件是否以换行结尾: splitlines() 会丢弃末尾换行,
@@ -58,7 +56,7 @@ class RevIni:
             stripped = raw.strip()
             if not stripped:
                 continue
-            if stripped.startswith("#") or stripped.startswith(";"):
+            if stripped.startswith(("#", ";")):
                 if section:
                     model._section_tail[section] = i
                 continue
@@ -100,7 +98,7 @@ class RevIni:
     def has(self, section: str, key: str) -> bool:
         return (section.lower(), key.lower()) in self._index
 
-    def keys(self, section: str) -> List[str]:
+    def keys(self, section: str) -> list[str]:
         """指定 section 的键列表(文件序,去重)。增量维护,O(section 键数)"""
         return list(self._section_keys.get(section.lower(), []))
 
@@ -139,12 +137,14 @@ class RevIni:
         elif self.lines:
             insert_at = len(self.lines)
 
-        new_lines: List[str] = []
+        new_lines: list[str] = []
         is_new_section = sec not in self._section_lines
         if is_new_section:
-            # 需要新建 section: 文件非空时用空行分隔, 空文件直接写头 (L2)
-            prefix = "\n" if self.lines else ""
-            new_lines.append(f"{prefix}[{section}]")
+            # 空行必须是独立行元素(不能内嵌进标题行, 否则破坏行索引不变量),
+            # 且仅当前一行非空时才插入(文件末尾已有空行时不再叠加)
+            if self.lines and self.lines[-1].strip():
+                new_lines.append("")
+            new_lines.append(f"[{section}]")
         new_lines.append(f"{key} = {value}")
 
         if insert_at is None:
@@ -157,7 +157,9 @@ class RevIni:
         n = len(new_lines)
         self._shift_from(insert_at, n)
         if is_new_section:
-            self._section_lines[sec] = insert_at
+            # 空行分隔符(若有)是独立元素且在 new_lines[0], section 头行在
+            # insert_at + 1; _section_lines 必须指向头行, 否则偏移 1 (_refresh_tail 等会错)
+            self._section_lines[sec] = insert_at + (1 if new_lines and new_lines[0] == "" else 0)
         if sec:
             self._section_tail[sec] = insert_at + n - 1
         self._index[(sec, key_lower)] = insert_at + n - 1
@@ -179,6 +181,10 @@ class RevIni:
         sk = self._section_keys.get(sec)
         if sk and key_lower in sk:
             sk.remove(key_lower)
+            if not sk:
+                # 与全量重算一致: section 已无键时不保留空列表条目,
+                # 否则差分测试 _section_keys 不一致 (全量重算只登记有键的 section)
+                del self._section_keys[sec]
         # 增量维护:平移后续行号 + 局部重算该 section 的 tail
         self._shift_from(idx + 1, -1)
         self._refresh_tail(sec)
@@ -269,7 +275,7 @@ class RevIni:
 
     # ---------- 备份 ----------
     @staticmethod
-    def backup(path: str) -> Optional[str]:
+    def backup(path: str) -> str | None:
         """保存前自动备份为 rev.ini.bak,返回备份路径;失败返回 None"""
         try:
             bak = path + ".bak"
@@ -287,7 +293,7 @@ def _unquote(s: str) -> str:
     return s
 
 
-def decode_ini_bytes(data: bytes) -> Tuple[str, str]:
+def decode_ini_bytes(data: bytes) -> tuple[str, str]:
     """探测 rev.ini 字节编码:优先 UTF-8(含 BOM),失败回退 GBK。
     返回 (文本, 使用的编码)"""
     # 带 BOM 的 UTF-8
@@ -385,9 +391,16 @@ game = {VERSION}
 # 兼容导入: 旧代码可能写 `from ini_model import FIELD_GROUPS / rank_* / *_field()`。
 # 新代码应直接 `from .fields import ...`。保留此层避免外部脚本/测试中断,
 # 但内部模块已迁移到直接从 fields.py 导入。
-from .fields import (  # noqa: E402, F401
-    FIELD_GROUPS, LANG_NAMES, RANK_DISPLAY,
-    bool_field, combo_field, int_field, rank_field,
-    rank_level_to_name, rank_name_to_level,
-    text_field, textarea_field,
+from .fields import (  # noqa: F401
+    FIELD_GROUPS,
+    LANG_NAMES,
+    RANK_DISPLAY,
+    bool_field,
+    combo_field,
+    int_field,
+    rank_field,
+    rank_level_to_name,
+    rank_name_to_level,
+    text_field,
+    textarea_field,
 )

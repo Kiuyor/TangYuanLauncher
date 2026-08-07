@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """用户设置持久化:记录用户手动指定的 CS:GO 路径等"""
 from __future__ import annotations
 
 import json
 import os
 import sys
-from typing import Optional
+
 
 # 设置文件放在用户配置目录,而非源码目录。
 # 原因: Nuitka --onefile 打包后 __file__ 指向临时解压目录,
@@ -56,7 +55,7 @@ def save_settings(data: dict) -> bool:
         return False
 
 
-def get_user_csgo_dir() -> Optional[str]:
+def get_user_csgo_dir() -> str | None:
     d = load_settings().get("user_csgo_dir", "")
     return d if d and os.path.isdir(d) else None
 

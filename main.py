@@ -1,6 +1,6 @@
 """Rev.Ini 编辑器 — 入口"""
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -12,8 +12,9 @@ if getattr(sys, "frozen", False) or "__compiled__" in globals():
     if os.path.isdir(engine) and not os.environ.get("FLET_VIEW_PATH"):
         os.environ["FLET_VIEW_PATH"] = engine
 
-from flet_app.main import main as flet_main
 import flet as ft
+
+from flet_app.main import main as flet_main
 
 # FLET_APP_HIDDEN: 引擎窗口隐藏启动, main() 构建完 UI 后 page.window.visible=True
 # 才一次性显示 —— 避免启动时 Flutter 默认空白窗口一闪而过 (用户反馈 2026-08)

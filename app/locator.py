@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """CS:GO 安装目录自动定位
 
 优先级:
@@ -10,7 +9,6 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 try:
     import winreg
@@ -86,15 +84,12 @@ def _clean_reg_path(path_value: str) -> str:
 
 def _common_dirs() -> list:
     """常见安装路径(不检测 Steam 目录:本工具面向 no-steam 旧版)"""
-    out = []
-    for drive in ("C:", "D:", "E:"):
-        for p in (f"{drive}\\CSGO", f"{drive}\\csgo",
-                  f"{drive}\\Games\\CSGO"):
-            out.append(p)
-    return out
+    return [p for drive in ("C:", "D:", "E:")
+            for p in (f"{drive}\\CSGO", f"{drive}\\csgo",
+                      f"{drive}\\Games\\CSGO")]
 
 
-def find_csgo_dir() -> Optional[str]:
+def find_csgo_dir() -> str | None:
     """自动定位 CS:GO 安装目录,找不到返回 None。
     注册表访问在权限受限/重定向环境下可能抛异常,整体兜底保证永不崩溃。"""
     try:
@@ -104,7 +99,7 @@ def find_csgo_dir() -> Optional[str]:
         return None
 
 
-def _find_csgo_dir_impl() -> Optional[str]:
+def _find_csgo_dir_impl() -> str | None:
     candidates = []
 
     # 1. 注册表卸载信息
@@ -148,7 +143,7 @@ def _find_csgo_dir_impl() -> Optional[str]:
     return None
 
 
-def locate_rev_ini(csgo_dir: Optional[str] = None) -> Optional[str]:
+def locate_rev_ini(csgo_dir: str | None = None) -> str | None:
     """定位 rev.ini,优先级:
     1. 显式传入目录
     2. 用户手动指定的路径(settings.json 持久化)
@@ -178,7 +173,7 @@ def locate_rev_ini(csgo_dir: Optional[str] = None) -> Optional[str]:
     return None
 
 
-def find_cfg_dir(csgo_dir: Optional[str]) -> Optional[str]:
+def find_cfg_dir(csgo_dir: str | None) -> str | None:
     """从 CS:GO 根目录推导 cfg 文件夹 ([根目录]\\csgo\\cfg)
     兼容两种形态:
     - 根目录: D:\\CSGO\\csgo\\cfg
