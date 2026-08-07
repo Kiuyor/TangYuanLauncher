@@ -37,3 +37,6 @@ findings2.md
 .hermes/
 .ruff_cache/
 *.log
+
+# 例外: 内置交付资源 (Loader 优化版, 需要随仓库分发)
+!assets/Loader_opt23.exe

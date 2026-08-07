@@ -754,8 +754,8 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         def make_runner(tool, run_btn, status_txt):
             def run_tool_clicked(_=None):
                 d = st["csgo_dir"] or find_csgo_dir() or ""
-                if not d or not os.path.isfile(os.path.join(d, tool.file)):
-                    set_status(f"TOOL // 未定位 {tool.file}", err=True)
+                if not d or (tool.file is not None and not os.path.isfile(os.path.join(d, tool.file))):
+                    set_status(f"TOOL // 未定位 {tool.file or tool.name}", err=True)
                     return
                 timeout = _parse_timeout()
                 def _run():
@@ -791,7 +791,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                             setattr(run_btn, "content", "运行"),
                             setattr(status_txt, "value", "无法启动"),
                             setattr(status_txt, "color", ft.Colors.RED),
-                            set_status(f"TOOL START FAIL // {tool.file}", err=True),
+                            set_status(f"TOOL START FAIL // {tool.file or tool.name}", err=True),
                             page.update()))
                 if st["dirty"]:
                     confirm_discard(_run, title="运行修复工具",
