@@ -123,12 +123,11 @@ def compress_chunk(game_dir: str, out_dir: str, idx: int, items) -> None:
         os.remove(tmp)
     list_file = os.path.join(out_dir, f"part{idx:02d}.list")
     with open(list_file, "w", encoding="utf-8") as f:
-        for rel, _ in items:
-            f.write(rel + "\n")
+        f.writelines(rel + "\n" for rel, _ in items)
     cmd = [SEVENZ, "a", "-t7z", "-mx=9", "-m0=LZMA2", "-md=64m",
            "-mfb=273", "-ms=on", "-mmt=on", tmp, "@" + list_file]
     print(f"  [{name}] {len(items)} 文件 ...", flush=True)
-    r = subprocess.run(cmd, cwd=game_dir, capture_output=True)
+    r = subprocess.run(cmd, cwd=game_dir, capture_output=True, check=False)
     if r.returncode != 0:
         sys.exit(f"7z 失败 ({name}): {r.stderr.decode('utf-8', 'replace')[-800:]}")
     os.replace(tmp, os.path.join(out_dir, name))
@@ -145,7 +144,7 @@ def main() -> None:
         apply_patch(game_dir, rel, old, new, marker)
     for rel, src, md5 in FILE_REPLACEMENTS:
         apply_file_replacement(game_dir, rel, src, md5)
-    print(f"== 2/3 收集文件清单")
+    print("== 2/3 收集文件清单")
     files = collect_files(game_dir)
     total = sum(s for _, s in files)
     print(f"  {len(files)} 文件, {total/1024/1024/1024:.2f} GB")
@@ -153,7 +152,7 @@ def main() -> None:
         sys.exit(f"[FATAL] 游戏目录无文件: {game_dir} (检查路径是否被 shell 转义)")
     chunks = chunk_files(files, CHUNK_BYTES)
     print(f"  分为 {len(chunks)} 块 (目标 {TARGET_CHUNK_MB}MB/块)")
-    print(f"== 3/3 分块压缩")
+    print("== 3/3 分块压缩")
     for i, items in enumerate(chunks):
         compress_chunk(game_dir, out_dir, i, items)
     iss = os.path.join(os.path.dirname(out_dir), "chunks.iss")

@@ -32,6 +32,15 @@
 
 ### 修复
 
+- **打包版修复工具资源缺失**: assets(Loader_opt23.exe/items_730.bin)现由构建脚本复制进发行包,
+  修复「安装优化 Loader」「更新皮肤库」在发行版必然报错的问题(deep-review 4轮 HIGH)
+- **自动进服恢复保护**: 启动窗口期(≤10s)内用户保存配置不再被 ProcName 恢复覆盖
+  (restore 前比对当前行, 非 patch 写入形态则跳过; deep-review 4轮 LOW)
+- **rank/combo 非法值提示**: 原值不在选项时显示 error_text 暴露真实值, 不再静默显示默认项
+  (deep-review 4轮 MEDIUM)
+- **+connect 剥离词边界**: 不再误剥 +connectivity 类参数(deep-review 4轮 LOW)
+- **窗口定位竞态**: 启动 2s 内已进编辑页时, 延迟定位改用当前窗口尺寸计算中心(deep-review 4轮 MEDIUM)
+- **防连点双加载**: 「配置」按钮快速连点不再触发重复文件加载(deep-review 4轮 LOW)
 - ini_model 新建 section 空行分隔与索引不变量修复(差分测试 300 轮全过)
 - 新增 section 后删除键导致的索引不一致修复
 - procname 定位误匹配注释/值中的字面文本加固

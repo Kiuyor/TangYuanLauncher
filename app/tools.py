@@ -13,7 +13,13 @@ from dataclasses import dataclass
 from datetime import datetime
 
 # 内置资源目录 (Loader 优化版 / 扩展版物品库)
-ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+# Nuitka 打包版: app 包整体内嵌进 exe, __file__ 不再指向磁盘源码路径;
+# 资源由 build_nuitka.bat 复制到 exe 同级 assets\ (与 locator 的 exe 同级 game\ 同模式)。
+# 开发版: 仓库根 assets\。
+if getattr(sys, "frozen", False) or "__compiled__" in globals():
+    ASSETS_DIR = os.path.join(os.path.dirname(sys.executable), "assets")
+else:
+    ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
 ASSET_LOADER = "Loader_opt23.exe"
 ASSET_ITEMS = "items_730.bin"
 
@@ -277,18 +283,6 @@ REPAIR_TOOLS: list[RepairTool] = [
         handler=_speedup_startgame,
     ),
 ]
-
-
-def csgo_dir_from_ini(ini_path: str) -> str:
-    """从 rev.ini 路径推导 CSGO 根目录"""
-    if ini_path:
-        return os.path.dirname(ini_path)
-    # 兜底:工具自身所在目录的上级
-    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    if os.path.basename(here).upper() == "CSGO":
-        return here
-    return here
-
 
 
 def run_tool(csgo_dir: str, tool: RepairTool,

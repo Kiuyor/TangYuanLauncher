@@ -1,8 +1,8 @@
-# -*- coding: utf-8 -*-
 """图标抠图 v3: 保留内圈圆角方块(深蓝底+白色图形), 裁掉方块外的角落蓝色。
 判定: dist_inner 远(>60)=白色主体保留; 蓝色像素按 (dist_inner - dist_outer) 符号区分内外。
 """
 import math
+
 from PIL import Image
 
 SRC = r"C:\Users\75017\Downloads\IMG_20260805_113851.png"

@@ -1,11 +1,10 @@
 """CS:GO 安装目录自动定位
 
-优先级:
-1. 注册表卸载信息 (Nosteam CSGO 的 InstallLocation)
-2. 注册表 DisplayIcon 推导
-3. 启动器 exe 同级 game\\ 子目录 (v2.0.0 内嵌游戏版)
-4. 当前工作目录 / 脚本所在目录
-5. 常见安装路径
+实际优先级 (与实现一致, deep-review F4 修正):
+1. 启动器 exe 同级 game\\ 子目录 (v2.0.0 内嵌游戏版, 命中立即返回)
+2. 注册表卸载信息 (Nosteam CSGO 的 InstallLocation / DisplayIcon 推导)
+3. 当前工作目录 / 脚本所在目录
+4. 常见安装路径
 """
 from __future__ import annotations
 

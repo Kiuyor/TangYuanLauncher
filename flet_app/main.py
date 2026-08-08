@@ -66,11 +66,37 @@ WIN_EDIT = (980, 720)
 WIN_MIN = (360, 510)
 
 
+def _strip_connect_arg(val: bytes) -> bytes:
+    """从启动参数中剥离已有的 +connect <地址> 参数(含其前导空白), 返回清理后字节。
+    无 +connect 时原样返回。用于自动进服更新时替换旧地址 (deep-review F2):
+    残留/手写的旧 +connect 不清理的话, 新地址永远进不去。
+    词边界: +connect 后必须紧跟空白或串尾, 防误剥 +connectivity 等参数 (deep-review 4轮 LOW5)。"""
+    low = val.lower()
+    i = low.find(b"+connect")
+    while i >= 0:
+        j = i + len(b"+connect")
+        if j == len(low) or low[j:j + 1] in (b" ", b"\t"):
+            break
+        i = low.find(b"+connect", j)
+    if i < 0:
+        return val
+    j = i + len(b"+connect")
+    while j < len(val) and val[j:j + 1] in (b" ", b"\t"):
+        j += 1                       # 跳过 +connect 与地址之间的空白
+    while j < len(val) and val[j:j + 1] not in (b" ", b"\t"):
+        j += 1                       # 跳过地址 token (到下一个空白或串尾)
+    k = i
+    while k > 0 and val[k - 1:k] in (b" ", b"\t"):
+        k -= 1                       # 向前吃掉 +connect 前的空白
+    return (val[:k] + val[j:]).strip()
+
+
 def _procname_patch(ini_path, new_value):
     """临时把 [Loader] ProcName 行替换为 原值 + ' +connect <server>'
     (Loader.exe 读取该文件构建 csgo.exe 命令行, 自动进服用)。
     纯字节级行内替换: 不经过 model/编码往返, 保证无关字节零改动。
-    返回被替换行的原始字节 (供启动后恢复); 失败/无需改动返回 None。
+    返回 (原始行字节, patch 后新行字节) (供启动后恢复; 恢复前比对当前行,
+    被用户保存覆盖时跳过恢复); 失败/无需改动返回 None。
     大小写不敏感 (通过 lowercase 副本定位, 切片仍取原字节)。"""
     nv = str(new_value or "").strip()
     if not nv:
@@ -92,10 +118,32 @@ def _procname_patch(ini_path, new_value):
         li = low.find(b"[loader]", li + 1)   # 注释/值里的误匹配, 继续找
     if li < 0:
         return None
-    sec_end = low.find(b"[", li + 8)
-    if sec_end < 0:
-        sec_end = len(raw)
-    pi = low.find(b"procname", li, sec_end)
+    # section 结束: 下一个真正的 section 头行 (行首到 [ 只有空白)。
+    # 原实现找任意 [ 会被段内注释/值里的 [ 提前截断 (deep-review F1 同族加固)
+    sec_end = len(raw)
+    ni = li + 8
+    while True:
+        ni = low.find(b"[", ni)
+        if ni < 0:
+            break
+        nls = low.rfind(b"\n", 0, ni) + 1
+        if low[nls:ni].strip() == b"":
+            sec_end = ni
+            break
+        ni += 1
+    # 定位 ProcName 键行: 必须是非注释行 (行首到键名只有空白)。
+    # 注释行含 procname 字样时, 原实现把 +connect 追加到注释行 (deep-review F1)
+    pi = -1
+    p = li
+    while True:
+        p = low.find(b"procname", p, sec_end)
+        if p < 0:
+            break
+        pls = raw.rfind(b"\n", 0, p) + 1
+        if raw[pls:p].strip() == b"":
+            pi = p
+            break
+        p += 1
     if pi < 0:
         return None
     ls = raw.rfind(b"\n", 0, pi) + 1      # 行首 (含 CRLF 的 \r 之前)
@@ -109,8 +157,8 @@ def _procname_patch(ini_path, new_value):
     val_raw = line[eq + 1:]                # = 后的原始空白 + 值
     old_val = val_raw.strip()
     ws = val_raw[:len(val_raw) - len(val_raw.lstrip())]   # 仅 = 与值之间的前导空白
-    if b"+connect" in old_val.lower():
-        return None                       # 已含 +connect (手动或上次残留), 不重复追加
+    # 已有 +connect (手动或上次残留): 剥离旧地址再追加新值, 保证新地址生效 (deep-review F2)
+    old_val = _strip_connect_arg(old_val)
     new_line = line[:eq + 1] + ws + old_val + b" +connect " + nv.encode("ascii", errors="replace")
     if line.endswith(b"\r"):   # CRLF 文件: 保留行尾 \r, 避免中间态混行尾
         new_line += b"\r"
@@ -119,13 +167,15 @@ def _procname_patch(ini_path, new_value):
             f.write(raw[:ls] + new_line + raw[le:])
     except OSError:
         return None
-    return line
+    return line, new_line
 
 
-def _procname_restore(ini_path, orig_line):
+def _procname_restore(ini_path, orig_line, new_line=None):
     """启动完成后把 [Loader] ProcName 行恢复为原始字节 (csgo 命令行已固化,
-    文件恢复不影响已启动进程)。失败静默: 残留 +connect 无害, 下次启动去重检查
-    会跳过重复追加。"""
+    文件恢复不影响已启动进程)。失败静默: 残留 +connect 无害——
+    下次启动 _procname_patch 会剥离旧地址再追加新值 (deep-review F2)。
+    new_line: patch 写入的新行; 传入后先比对当前行——若已被其它方(如用户保存)
+    改写则不恢复, 避免用旧行覆盖用户新值 (deep-review 4轮 LOW4)。"""
     if not orig_line:
         return
     try:
@@ -145,16 +195,40 @@ def _procname_restore(ini_path, orig_line):
         li = low.find(b"[loader]", li + 1)   # 注释/值里的误匹配, 继续找
     if li < 0:
         return
-    sec_end = low.find(b"[", li + 8)
-    if sec_end < 0:
-        sec_end = len(raw)
-    pi = low.find(b"procname", li, sec_end)
+    # section 结束: 下一个真正的 section 头行 (行首到 [ 只有空白), 与 _procname_patch 一致
+    sec_end = len(raw)
+    ni = li + 8
+    while True:
+        ni = low.find(b"[", ni)
+        if ni < 0:
+            break
+        nls = low.rfind(b"\n", 0, ni) + 1
+        if low[nls:ni].strip() == b"":
+            sec_end = ni
+            break
+        ni += 1
+    # 定位 ProcName 键行: 必须是非注释行 (与 _procname_patch 一致, deep-review F1)
+    pi = -1
+    p = li
+    while True:
+        p = low.find(b"procname", p, sec_end)
+        if p < 0:
+            break
+        pls = raw.rfind(b"\n", 0, p) + 1
+        if raw[pls:p].strip() == b"":
+            pi = p
+            break
+        p += 1
     if pi < 0:
         return
     ls = raw.rfind(b"\n", 0, pi) + 1
     le = raw.find(b"\n", pi)
     if le < 0:
         le = len(raw)
+    # 启动窗口期(≤10s)内文件可能被用户保存覆盖: 当前行不是 patch 写入的行时跳过,
+    # 避免用旧行覆盖用户新值 (deep-review 4轮 LOW4)
+    if new_line is not None and raw[ls:le] != new_line:
+        return
     try:
         with open(ini_path, "wb") as f:
             f.write(raw[:ls] + orig_line + raw[le:])
@@ -419,8 +493,15 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                     ctrl.error_text = "原值非整数, 保存将保留原文" if vr.get("bad") else None
             elif ftype in ("combo", "rank"):
                 vr["v"] = str(raw)
-                if isinstance(ctrl, ft.Dropdown) and vr["v"] in [o.key for o in ctrl.options]:
-                    ctrl.value = vr["v"]
+                if isinstance(ctrl, ft.Dropdown):
+                    if vr["v"] in [o.key for o in ctrl.options]:
+                        ctrl.value = vr["v"]
+                        ctrl.error_text = None
+                    else:
+                        # 原值不在选项中(rank 非法值/combo 未知值): 不静默显示默认项,
+                        # 用 error_text 暴露真实值; collect 对 bad 字段跳过写回 (deep-review 4轮 M3)
+                        ctrl.value = None
+                        ctrl.error_text = "原值 " + repr(vr["v"]) + " 不在选项中, 保存将保留原文"
             elif ftype == "textarea":
                 vr["v"] = str(raw)
                 if isinstance(ctrl, ft.Column):
@@ -612,7 +693,8 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 filled=True,   # 0.86.5: Dropdown 必须 filled=True 才绘制 fill_color (视觉审计 2026-08)
                 border_color=INPUT_BORDER, focused_border_color=COL_BRAND, fill_color=INPUT_FILL,
                 on_select=lambda e: (vr.__setitem__("v", e.control.value),
-                                     vr.__setitem__("bad", False), mark_dirty()))
+                                     vr.__setitem__("bad", False),
+                                     setattr(e.control, "error_text", None), mark_dirty()))
         elif ftype in ("combo",):
             items = field.get("items", [])
             dm = field.get("display_map") or {}   # M4: 未提供 display_map 时不能 .get() None
@@ -621,7 +703,8 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 filled=True,   # 0.86.5: 同上, 否则透明底融进卡片
                 value=str(default) if default else (items[0] if items else ""),
                 border_color=INPUT_BORDER, focused_border_color=COL_BRAND, fill_color=INPUT_FILL,
-                on_select=lambda e: (vr.__setitem__("v", e.control.value), mark_dirty()))
+                on_select=lambda e: (vr.__setitem__("v", e.control.value),
+                                     setattr(e.control, "error_text", None), mark_dirty()))
         elif ftype == "int":
             # 非法输入(非整数/超范围)显示 error_text 而非静默转 0; 支持负数 (deep-review F3/R8)
             def _on_int_change(e, vr=vr):
@@ -1123,13 +1206,16 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         # "+connect <ip:port>" 临时追加到启动目标 rev.ini 的 ProcName 行
         # (Loader.exe 读此文件构建 csgo.exe 命令行, deep-review R7 同源规则),
         # csgo.exe 出现后由 poll 恢复原样。失败静默, 不影响正常启动。
-        proc_orig = None
+        proc_orig = proc_new = None
         try:
             _m = RevIni.load(ini)
             auto_join = str(_m.get("Loader", "ConnectServer", "") or "").strip()
-            _proc = str(_m.get("Loader", "ProcName", "") or "").strip()
-            if auto_join and "+connect" not in _proc:
-                proc_orig = _procname_patch(ini, auto_join)   # 助手内部拼 " +connect <server>"
+            if auto_join:
+                # patch 内部会剥离残留/手写的旧 +connect 再追加新地址 (deep-review F2),
+                # 不再用 "+connect not in _proc" 短路——否则旧地址残留时新地址永远进不去
+                _patched = _procname_patch(ini, auto_join)   # 助手内部拼 " +connect <server>"
+                if _patched:
+                    proc_orig, proc_new = _patched
         except OSError:
             pass
         try:
@@ -1145,12 +1231,12 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 except Exception:  # noqa: BLE001 - ShellExecuteW 调用兜底, 失败归入错误路径
                     res = 0
                 if res <= 32:
-                    _procname_restore(ini, proc_orig)
+                    _procname_restore(ini, proc_orig, proc_new)
                     show_home_error(f"{loader_name} 需要管理员权限, 请在 UAC 弹窗中确认")
                     return
                 # 提权拉起成功, fall through 到统一轮询
             else:
-                _procname_restore(ini, proc_orig)
+                _procname_restore(ini, proc_orig, proc_new)
                 show_home_error(f"启动失败: {e}")
                 return
 
@@ -1167,7 +1253,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                     ok = True
                     break
                 time.sleep(0.5)
-            _procname_restore(ini, proc_orig)   # 自动进服: 恢复 ProcName (无论成败, csgo 命令行已固化)
+            _procname_restore(ini, proc_orig, proc_new)   # 自动进服: 恢复 ProcName (无论成败, csgo 命令行已固化)
             # 轮询线程只做检测, UI 变更统一回主线程 (H1)
             page.run_thread(lambda: _apply_poll_result(ok))
 
@@ -1352,6 +1438,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         造成切换时明显卡顿 (2026-08 用户反馈)。
         M2/H1: _prep 线程只做磁盘 IO+解析(纯数据), UI 应用统一经 run_thread 回主线程,
         load_state 互斥防双加载。"""
+        if load_state["loading"]:
+            # 快速连点「配置」: 首次 _prep 仍在加载时直接忽略, 防双加载 (deep-review 4轮 LOW6)
+            return
         # 主线程先置互斥再起线程: 保证 _prep 未跑到置位语句时 show_editor
         # 也能看到 loading=True, 杜绝"双加载"竞态窗口 (M2)
         load_state["loading"] = True
@@ -1518,8 +1607,12 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 page.window.visible = True
                 s2 = _screen_center()
                 if s2:
-                    page.window.left = s2[0] - WIN_HOME[0] / 2
-                    page.window.top = s2[1] - WIN_HOME[1] / 2
+                    # 用当前窗口尺寸计算中心: 启动 2s 内用户可能已进编辑页(980×720),
+                    # 硬编码 WIN_HOME 会把宽窗口推偏 (deep-review 4轮 M2)
+                    w = page.window.width or WIN_HOME[0]
+                    h = page.window.height or WIN_HOME[1]
+                    page.window.left = round(s2[0] - w / 2)
+                    page.window.top = round(s2[1] - h / 2)
                 page.update()
             except Exception:  # noqa: BLE001, S110 - 窗口字段兜底, 失败静默
                 pass

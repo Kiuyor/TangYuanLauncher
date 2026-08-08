@@ -49,7 +49,17 @@ if not exist "build\nuitka\main.dist\icon.ico" (
   pause
   exit /b 1
 )
-echo [OK] build done: build\nuitka\main.dist\RevIniEditor.exe + engine + icon.ico
+rem Built-in repair-tool assets: app\tools.py resolves ASSETS_DIR next to the exe in
+rem packaged builds (app package is embedded, __file__ unreliable) - ship them here
+mkdir "build\nuitka\main.dist\assets" >nul 2>nul
+copy /y "assets\Loader_opt23.exe" "build\nuitka\main.dist\assets\" >nul
+copy /y "assets\items_730.bin" "build\nuitka\main.dist\assets\" >nul
+if not exist "build\nuitka\main.dist\assets\Loader_opt23.exe" (
+  echo [ERROR] assets copy failed
+  pause
+  exit /b 1
+)
+echo [OK] build done: build\nuitka\main.dist\RevIniEditor.exe + engine + icon.ico + assets
 echo [OK] next: "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\installer.iss
 pause
 endlocal
