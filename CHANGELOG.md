@@ -2,6 +2,56 @@
 
 本项目的所有重要变更均记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [2.2.0] - 2026-08-09
+
+### 修复:第 7 轮深度审查 (deep-review round 7, 3 MEDIUM + 2 LOW + 窗口/工具链域 9 项)
+
+- **MEDIUM 交错 section 索引分歧**:`ini_model._refresh_tail` 修复交错重复 section(A→B→A)——原实现扫到其他 section 头即 break,tail 截断到首个同名块,remove 后 `set()` 把新键插进第一个块;现改为跟踪当前 section 归属扫到文件尾,与全量重算语义完全一致(500 轮差分 + 定向场景全过)——`app/ini_model.py`
+- **MEDIUM 多显示器窗口跳回主屏**:进出编辑页不再强制用主屏中心重定位,保持当前窗口中心(副屏拖动位置不丢);`_settle_position` 启动 2s 后仅在窗口仍在默认角标时才居中,不撤销用户已拖动位置;`resize_state` busy 时请求排队重放,快速连点不丢切换——`flet_app/main.py`
+- **MEDIUM model=None 空表单**:`enter_editor` 的 OSError 失败路径(rev.ini 被独占锁/IO 错)也走默认模板兜底,不再留 model=None 空表单导致保存抛未捕获 AttributeError——`flet_app/main.py`
+- **MEDIUM 卸载字体注册清理失效**:`installer.iss` 卸载校验路径拼接缺反斜杠(`'{app}\fonts' + FontFile` → `...\fontsHarmonyOS...`),与注册值永不相等 → 卸载后 HKCU Fonts 残留 7 个悬空注册项;补反斜杠并验证——`packaging/installer.iss`
+- **MEDIUM 组件化合规 (rules.md §1)**:字段行控件迁移到组件库 `ui.input_dark`/`ui.select_dark`(补 width/height/on_change/on_select/filled 参数);新增 `ui.page_head`/`ui.field_grid`/`ui.rec_panel`/`ui.launch_split` 消除页面内联伪组件;主页昵称改用 `ui.nickname(size=24)`;design-system.md 标注 Flet 原生豁免(#1/#2/#9/#10/#11/#27/#28)——`flet_app/main.py`/`flet_app/components/ui.py`/`docs/design-system.md`
+- **LOW tokens.md 补 Flet 常量映射列**:字号/圆角/布局/收编色各表补 Flet 常量( FONT_*/RADIUS_*/WIN_*/H_*/S_*/COL_LAUNCH_*/SHADOW_* ),违反 rules §2.2/§3.2 的登记缺口闭合——`docs/tokens.md`
+- **MEDIUM 启动提速假幂等假成功**:`_speedup_startgame` 正则加行首锚定(banner/ECHO 文本里的 `timeout /t 2` 字样不再假报"已是快速启动"跳过真实延迟行;re.sub count=1 只改真实命令行)——`app/tools.py`
+- **MEDIUM settings 非原子写**:`save_settings` 改临时文件 + fsync + `os.replace` 原子替换,防磁盘满/杀软中断留截断 JSON 导致目录设置静默遗忘;`main.py` 检查 `set_user_csgo_dir` 返回值,失败明确提示——`app/settings.py`/`flet_app/main.py`
+- **LOW 备份路径可见**:`_update_items`/`_speedup_startgame` 写入失败时消息附带 `.bak_<ts>` 备份路径,供手动还原——`app/tools.py`
+- **LOW 持久化目录播种**:启动时 `find_csgo_dir()` 未命中回退 `get_user_csgo_dir()`,持久化目录的 rev.ini 缺失时工具页/启动不再误报"未定位"——`flet_app/main.py`
+- **LOW 弱命中不遮蔽注册表**:`_is_game_subdir` 仅含 Loader.exe 的弱目录不再抢先 return,加入候选由 `_looks_like_csgo_dir`(要求 csgo.exe)裁决,不抢注册表里的完整安装——`app/locator.py`
+- **MEDIUM 回归脚本盲区**:`verify_tools.py` 补 `_update_items`(备份/覆盖/同大小异内容/幂等)、`_backup_file`、`_clean_reg_leftover`、`run_tool` bat 路径(成功/缺脚本/超时杀树)覆盖——`scripts/verify_tools.py`
+
+### 修复:第 6 轮深度审查 (deep-review round 6, 回归 + 打包污染)
+
+- **HIGH 回归修复**:修复工具「运行」按钮改用组件库 `RunButton` 后,状态切换仍用旧式 `content` 字符串赋值,把按钮的图标+文字结构整体替换成纯字符串 → 图标丢失。改为 `set_busy()` 驱动——`flet_app/main.py`
+- **MEDIUM 打包污染**:`prepare_chunks.py` 分块收集把补丁阶段生成的 `.bak_<ts>` 备份打进发行分块(玩家安装目录多出冗余备份,每轮重跑累积)。`collect_files` 排除 `.bak_` 文件——`packaging/prepare_chunks.py`
+- **清理**:配置卡片 hover 由组件库自带,移除 `main.py` 中重复的手动 hover 覆盖(仅保留 LaunchSplit 内联卡的 hover)
+- **修复卸载误删字体注册**:卸载时删除 HKCU 字体注册前验证注册值指向本安装目录(避免误删别人同名字体注册)——`packaging/installer.iss`
+- **版本号同步**:`build_release.bat`/`README_分发版.md` 文案 2.0.0→2.1.0(分发文档指向不存在的旧版本产物)
+- **修复 prepare_chunks Low 项**:startgame.bat 补丁去尾空格(双空格 `timeout /t 2  /nobreak`);整文件替换加 src md5 跟常量一致性断言(防 assets 更新后忘同步常量导致幂等判定失效);分块加增量指纹缓存(manifest.json, 未变块跳过重压省 15-30 分钟);SolidCompression 保留并注明风险评估(分块不进 Solid 流无重插盘)——`packaging/prepare_chunks.py`/`packaging/installer.iss`
+
+### 修复:第 5 轮深度审查 (deep-review round 5, 2 HIGH + 5 MEDIUM + 3 LOW)
+
+- **HIGH 启动命令回填**:修复「启动命令」textarea 加载后不显示文件真实值的问题(v2 重构把控件从 Column 改为 Row,`populate_all` 的类型检查失配导致回填失效,用户编辑/点 chips 后保存会覆盖原启动参数)——`flet_app/main.py`
+- **HIGH 配置入口锁死**:修复第二次进编辑页后 `loading` 互斥不复位、第三次点「配置」被永久拦截的问题——`flet_app/main.py`
+- **MEDIUM 质量门**:ruff 全库清零(未使用导入/别名冗余/排序/BLE001/RUF013)
+- **MEDIUM 文档一致性**:HTML 事实源 `.config-card:hover` 旧色 `#2563eb` 修正为矢车菊蓝,`tokens.md` 补齐 4 个 rgba 令牌
+- **MEDIUM 组件库合规**:`status_bar`/`tool_card`/`config_card` 改用组件库实现(补 `statusMsg`/`expand`/`desc_lines` 参数),`risk_tag` 兼容中文风险等级,`design-system.md` 同步
+- **MEDIUM 字体注册**:`installer.iss` 中 JetBrainsMono 注册值名补空格(与 ttf 实际 full name 一致,修复注册无效导致的字体回退)
+- **MEDIUM 索引不变量**:`ini_model._refresh_tail` 处理重复 section 头(修复 remove/set 后增量索引与全量重算分歧)
+- **LOW 工具脚本**:`verify_docs_consistency.py` 仓库根探测 + rgba 提取正则修正
+
+## [2.1.0] - 2026-08-09
+
+### 重大变更:UI 全面重设计(矢车菊蓝纯色主题)
+
+推翻旧天蓝/紫色渐变主题,采用矢车菊蓝 #6495ED 纯色体系(无渐变、无发光),HTML 预览稿为唯一事实源,新增设计系统三件套文档:
+
+- **新主题**:矢车菊蓝纯色 + 深色底,视觉评估多轮确认
+- **主页**:110px 圆形纯图标启动按钮(无文字)、服务器状态胶囊实时显示真实在线人数(接入官网 `cs.suchitems.top/api/status`,30s 轮询,离线隐藏人数不编造)
+- **编辑页**:784×600、双列字段卡等高、加载器 3:2 分栏 + 竖排推荐启动项、修复工具 2×2 网格
+- **字体**:HarmonyOS Sans SC(界面)+ JetBrains Mono(等宽)随安装包分发并自动注册,杜绝陌生机器回退默认字体的"一细一粗"渲染缺陷
+- **组件库**:新增 `flet_app/theme.py`(令牌)+ `flet_app/components/ui.py`(组件),约束写入 `docs/rules.md`
+- **文档体系**:`docs/design-system.md` / `docs/tokens.md` / `docs/rules.md` 三件套 + `DESIGN.md` 按 HTML 事实源修正
+
 ## [2.0.0] - 2026-08-07
 
 ### 新增:内嵌游戏版安装器(装完即玩)

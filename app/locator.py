@@ -146,8 +146,17 @@ def _find_csgo_dir_impl() -> str | None:
 
     # 2. 启动器 exe 同级 game\\ 子目录 (v2.0.0 内嵌游戏版)
     for g in _exe_sibling_game_dirs():
-        if _is_game_subdir(g):
+        if not _is_game_subdir(g):
+            continue
+        # 强命中 (含 rev.ini 或 csgo.exe): 内嵌游戏版装完即用, 立即返回
+        if os.path.exists(os.path.join(g, "rev.ini")) or \
+                os.path.exists(os.path.join(g, "csgo.exe")):
             return g
+        # 弱命中 (仅 Loader.exe, 部分解压/残留): 不遮蔽注册表里的完整安装
+        # (deep-review 7轮 工具链 F5: 原实现任一文件即 return, 弱目录抢走
+        # 注册表候选; 弱目录加入候选列表, 由统一验证 _looks_like_csgo_dir
+        # 决定是否可用 — 它要求 csgo.exe, 仅 Loader 的目录自然落选)
+        candidates.append(g)
 
     # 3. 当前工作目录 / 脚本位置
     candidates.append(os.getcwd())

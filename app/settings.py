@@ -38,7 +38,11 @@ def load_settings() -> dict:
 
 
 def save_settings(data: dict) -> bool:
-    """保存设置;成功返回 True,写入失败返回 False(不抛异常)"""
+    """保存设置;成功返回 True,写入失败返回 False(不抛异常)。
+    原子写: 临时文件 + os.replace, 防中途失败留截断文件
+    (deep-review 7轮 工具链 F3: 原直接 open(w) 截断后 dump,
+    磁盘满/杀软/被杀会留损坏 JSON, load_settings 静默回退 DEFAULTS
+    → user_csgo_dir 重启后遗忘)"""
     cur = load_settings()
     # 显式传入空字符串视为清空该键
     for k, v in data.items():
@@ -48,10 +52,19 @@ def save_settings(data: dict) -> bool:
             cur[k] = v
     try:
         os.makedirs(SETTINGS_DIR, exist_ok=True)
-        with open(SETTINGS_PATH, "w", encoding="utf-8") as f:
+        tmp = SETTINGS_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(cur, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, SETTINGS_PATH)
         return True
     except OSError:
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
         return False
 
 

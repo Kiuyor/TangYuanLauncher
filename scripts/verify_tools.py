@@ -92,6 +92,102 @@ def main():
     check("no timeout -> already fast", res and res[-1][0] and "无 timeout" in res[-1][1])
     shutil.rmtree(tmp)
 
+    # --- _update_items: 备份/覆盖/幂等闭环 (deep-review 7轮 工具链 F2 补覆盖) ---
+    from app.tools import _backup_file, _update_items
+    items_src = os.path.join(PROJ, "assets", "items_730.bin")
+    items_sz = os.path.getsize(items_src)
+    tmp2 = tempfile.mkdtemp()
+    platform = os.path.join(tmp2, "platform")
+    os.makedirs(platform)
+    old_items = b"OLD" * 100
+    items_target = os.path.join(platform, "items_730.bin")
+    with open(items_target, "wb") as f:
+        f.write(old_items)
+    res.clear()
+    _update_items(tmp2, lambda ok, m: res.append((ok, m)))
+    check("items update ok", res and res[-1][0], str(res[-1] if res else None))
+    with open(items_target, "rb") as f:
+        cur_items = f.read()
+    with open(items_src, "rb") as f:
+        want_items = f.read()
+    check("items content == assets", cur_items == want_items)
+    baks = [f for f in os.listdir(platform) if ".bak_" in f]
+    check("items backup created", len(baks) == 1, str(baks))
+    res.clear()
+    _update_items(tmp2, lambda ok, m: res.append((ok, m)))
+    check("items idempotent", res and res[-1][0] and "已是扩展版" in res[-1][1], str(res[-1] if res else None))
+    baks2 = [f for f in os.listdir(platform) if ".bak_" in f]
+    check("items no extra backup on idempotent", len(baks2) == 1, str(baks2))
+    # 同大小不同内容 -> 应覆盖 (MD5 判定, 非大小判定)
+    with open(items_target, "wb") as f:
+        f.write(b"Z" * items_sz)
+    res.clear()
+    _update_items(tmp2, lambda ok, m: res.append((ok, m)))
+    check("items same-size diff-content replaced",
+          res and res[-1][0] and "已更新" in res[-1][1], str(res[-1] if res else None))
+    with open(items_target, "rb") as f:
+        cur2 = f.read()
+    check("items content now assets", cur2 == want_items)
+    shutil.rmtree(tmp2)
+
+    # --- _backup_file: 正常/缺文件两路径 (deep-review 7轮 工具链 F2 补覆盖) ---
+    tmp3 = tempfile.mkdtemp()
+    f3 = os.path.join(tmp3, "x.txt")
+    with open(f3, "wb") as f:
+        f.write(b"hello")
+    bak_path, err = _backup_file(tmp3, "x.txt")
+    check("backup_file ok", bak_path is not None and err is None and os.path.isfile(bak_path))
+    with open(bak_path, "rb") as f:
+        check("backup content same", f.read() == b"hello")
+    bak_path2, err2 = _backup_file(tmp3, "missing.txt")
+    check("backup_file missing -> None+msg", bak_path2 is None and err2 is not None)
+    shutil.rmtree(tmp3)
+
+    # --- _clean_reg_leftover: 键不存在路径 (只读安全分支; 存在分支动真实注册表不测) ---
+    from app.tools import _clean_reg_leftover
+    res.clear()
+    _clean_reg_leftover(tempfile.mkdtemp(), lambda ok, m: res.append((ok, m)))
+    # 无论键是否存在, 回调必须被调用且为成功语义 (不存在=干净, 存在=清理/失败都有消息)
+    check("clean_reg callback fired", len(res) == 1, str(res))
+    check("clean_reg ok result", res and res[-1][0], str(res[-1] if res else None))
+
+    # --- run_tool bat 路径: 成功/超时杀树/缺脚本 (deep-review 7轮 工具链 F2 补覆盖) ---
+    from app.tools import run_tool
+    tmp4 = tempfile.mkdtemp()
+    ok_bat = os.path.join(tmp4, "ok.bat")
+    with open(ok_bat, "wb") as f:
+        f.write(b"@echo off\r\necho WORK_DONE\r\nexit /b 0\r\n")
+    fake_tool = next((t for t in REPAIR_TOOLS if t.name.startswith("清除武器")), None)
+    import dataclasses
+    bat_tool = dataclasses.replace(fake_tool, file="ok.bat", handler=None)
+    res.clear()
+    run_tool(tmp4, bat_tool, lambda ok, m: res.append((ok, m)), timeout=10)
+    import time as _t
+    for _ in range(50):
+        if res:
+            break
+        _t.sleep(0.1)
+    check("run_tool bat ok", res and res[-1][0] and "WORK_DONE" in res[-1][1], str(res[-1] if res else None))
+    # 缺脚本 -> 同步返回 False
+    missing_tool = dataclasses.replace(fake_tool, file="nope.bat", handler=None)
+    started = run_tool(tmp4, missing_tool, None)
+    check("run_tool missing script -> False", started is False)
+    # 超时 bat (ping 延迟 ~5s, 不用 timeout 命令: git-bash PATH 会把 GNU timeout
+    # 放在 System32 前, 遮蔽 Windows timeout.exe 导致测试环境差异) -> on_done(False) + 杀树
+    slow_bat = os.path.join(tmp4, "slow.bat")
+    with open(slow_bat, "wb") as f:
+        f.write(b"@echo off\r\nping -n 6 127.0.0.1 >nul\r\necho NEVER\r\n")
+    slow_tool = dataclasses.replace(fake_tool, file="slow.bat", handler=None)
+    res.clear()
+    run_tool(tmp4, slow_tool, lambda ok, m: res.append((ok, m)), timeout=2)
+    for _ in range(100):
+        if res:
+            break
+        _t.sleep(0.1)
+    check("run_tool timeout -> fail msg", res and res[-1][0] is False and "超时" in res[-1][1],
+          str(res[-1] if res else None))
+    shutil.rmtree(tmp4)
+
     # --- 工具元数据 ---
     t = next((t for t in REPAIR_TOOLS if t.name.startswith("安装优化")), None)
     check("loader tool found", t is not None)

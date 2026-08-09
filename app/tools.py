@@ -151,8 +151,9 @@ def _update_items(csgo_dir: str, on_done: Callable[[bool, str], None] | None = N
         if on_done:
             on_done(True, "items_730.bin 已是扩展版(无需更新)")
         return
+    bak = None
     if cur_sz:
-        _, err = _backup_file(csgo_dir, os.path.join("platform", ASSET_ITEMS))
+        bak, err = _backup_file(csgo_dir, os.path.join("platform", ASSET_ITEMS))
         if err:
             if on_done:
                 on_done(False, err)
@@ -163,8 +164,10 @@ def _update_items(csgo_dir: str, on_done: Callable[[bool, str], None] | None = N
             on_done(True, f"已更新 items_730.bin: {cur_sz} → {os.path.getsize(src)} 字节\n"
                           "(库存皮肤增加, 含咆哮系列; 原名已备份, 重进游戏生效)")
     except OSError as e:
+        # 备份已生成但写入失败: 告知备份路径, 供手动还原 (deep-review 7轮 工具链 F6)
         if on_done:
-            on_done(False, f"更新失败: {e}")
+            restore = f"\n原文件备份: {os.path.basename(bak)}, 可手动还原" if bak else ""
+            on_done(False, f"更新失败: {e}{restore}")
 
 
 def _speedup_startgame(csgo_dir: str, on_done: Callable[[bool, str], None] | None = None):
@@ -185,10 +188,14 @@ def _speedup_startgame(csgo_dir: str, on_done: Callable[[bool, str], None] | Non
         if on_done:
             on_done(False, f"读取失败: {e}")
         return
-    m = re.search(rb"timeout\s+/t\s+(\d+)", raw, re.IGNORECASE)
+    # 只认行首的 timeout 命令 (deep-review 7轮 工具链 F1): 无行首锚定时,
+    # banner/ECHO/REM 文本里的同形字样(如 "ECHO wait timeout /t 2 ...")会
+    # 先命中 → 假报"已是快速启动"跳过真实延迟行, 假幂等假成功。
+    # (?m)^[ \t]* 锚定行首+可选缩进; count=1 只改第一条真实命令。
+    m = re.search(rb"(?m)^[ \t]*timeout[ \t]+/t[ \t]+(\d+)", raw, re.IGNORECASE)
     if not m:
         if on_done:
-            on_done(True, "startgame.bat 无 timeout 行(已是快速启动)")
+            on_done(True, "startgame.bat 无 timeout 命令行(已是快速启动)")
         return
     cur = int(m.group(1))
     if cur <= 2:
@@ -200,7 +207,9 @@ def _speedup_startgame(csgo_dir: str, on_done: Callable[[bool, str], None] | Non
         if on_done:
             on_done(False, err)
         return
-    new_raw = re.sub(rb"timeout\s+/t\s+\d+", b"timeout /t 2", raw, flags=re.IGNORECASE)
+    # 保留行首缩进, 只替换命令本身 (count=1: 只改真实延迟行)
+    new_raw = re.sub(rb"(?m)^([ \t]*)timeout[ \t]+/t[ \t]+\d+",
+                     rb"\1timeout /t 2", raw, count=1, flags=re.IGNORECASE)
     try:
         with open(bat, "wb") as f:
             f.write(new_raw)
@@ -208,8 +217,9 @@ def _speedup_startgame(csgo_dir: str, on_done: Callable[[bool, str], None] | Non
             on_done(True, f"已优化 startgame.bat: timeout {cur}s → 2s\n"
                           f"(原件备份: {os.path.basename(bak)}, 可手动还原)")
     except OSError as e:
+        # 备份已生成但写入失败: 告知备份路径, 供手动还原 (deep-review 7轮 工具链 F6)
         if on_done:
-            on_done(False, f"写入失败: {e}")
+            on_done(False, f"写入失败: {e}\n原文件备份: {os.path.basename(bak)}, 可手动还原")
 
 
 REPAIR_TOOLS: list[RepairTool] = [

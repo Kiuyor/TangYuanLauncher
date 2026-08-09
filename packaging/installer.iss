@@ -1,10 +1,10 @@
-; 汤圆启动器 (TangYuanLauncher) — Inno Setup 安装脚本 v2.0.0 (内嵌游戏版)
+; 汤圆启动器 (TangYuanLauncher) — Inno Setup 安装脚本 v2.2.0 (内嵌游戏版, 矢车菊蓝新 UI)
 ; 编译: "C:\Users\75017\AppData\Local\Programs\Inno Setup 6\ISCC.exe" packaging\installer.iss
 ; 注意: 本文件 UTF-8 编码, Inno 6 默认 Unicode 安装器, 中文安全
 
 #define MyAppName "汤圆启动器"
 #define MyAppNameEn "TangYuanLauncher"
-#define MyAppVersion "2.0.0"
+#define MyAppVersion "2.2.0"
 #define MyAppPublisher "RevIniEditor"
 #define MyAppExeName "RevIniEditor.exe"
 
@@ -19,6 +19,9 @@ DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ; 压缩设置 (游戏分块已在 chunks.iss 里 nocompression, 不会被二次压缩)
 Compression=lzma2/max
+; SolidCompression + DiskSpanning 的"重插盘"风险评估 (deep-review 6轮 Low-8):
+; 分块是 dontcopy nocompression 独立 7z (不进 Solid 流), [Code] 顺序 ExtractTemporaryFile;
+; 非分块文件(主程序+7z+字体 ~180M)全在第一卷 → 无随机跳卷, 重插盘提示不会实际触发。保留 Solid 保压缩率。
 SolidCompression=yes
 ; 单文件安装器有 ~4.2GB 上限 (Inno/Windows 结构限制), 5.9G 内嵌游戏必须分卷
 DiskSpanning=yes
@@ -51,6 +54,15 @@ Source: "..\build\nuitka\main.dist\*"; DestDir: "{app}"; Flags: ignoreversion re
 ; 解压器运行时 (7z.exe 依赖同目录 7z.dll)
 Source: "..\build\7z\7z.exe"; DestDir: "{app}\7z"; Flags: ignoreversion
 Source: "..\build\7z\7z.dll"; DestDir: "{app}\7z"; Flags: ignoreversion
+; 设计字体随包 (rules.md §4.5: 禁止依赖目标机器已装字体, 否则回退默认字体出现"一细一粗")
+; HarmonyOS Sans SC (界面主字体) + JetBrains Mono (等宽/键名), 安装时注册 HKCU 用户字体
+Source: "fonts\HarmonyOS_Sans_SC_Regular.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
+Source: "fonts\HarmonyOS_Sans_SC_Medium.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
+Source: "fonts\HarmonyOS_Sans_SC_Bold.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
+Source: "fonts\JetBrainsMono-Regular.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
+Source: "fonts\JetBrainsMono-Medium.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
+Source: "fonts\JetBrainsMono-SemiBold.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
+Source: "fonts\JetBrainsMono-Bold.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
 ; 游戏分块契约 (由 prepare_chunks.py 生成: #define ChunkCount + Source 行, 不带 [Files] 头)
 #include "..\build\chunks.iss"
 
@@ -213,10 +225,61 @@ begin
   end;
 end;
 
+{ 字体注册权属校验删除 (deep-review 6轮 task-2 发现 2):
+  目标机 HKCU Fonts 可能已有同名字体注册 (用户手动装过/其它程序随包注册),
+  无条件 RegDeleteValue 会误删别人的注册项, 其字体静默失效。
+  只当注册值 data == [app]\fonts\<file> 时才删除 (usUninstall 在文件删除前, 路径可比较) }
+procedure DeleteFontRegIfOurs(RootKey: Integer; const ValueName, FontFile: String);
+var
+  RegPath: String;
+  ValueData: String;
+begin
+  RegPath := 'Software\Microsoft\Windows NT\CurrentVersion\Fonts';
+  if RegQueryStringValue(RootKey, RegPath, ValueName, ValueData) then
+  begin
+    if LowerCase(Trim(ValueData)) = LowerCase(ExpandConstant('{app}\fonts\' + FontFile)) then
+      RegDeleteValue(RootKey, RegPath, ValueName);
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  { 卸载时清理随包字体注册 (HKCU), 避免残留指向已删文件的注册项 }
+  if CurUninstallStep = usUninstall then
+  begin
+    { 删除前验证注册值指向本安装目录的字体文件 (deep-review 6轮):
+      目标机可能已有同名字体注册 (用户手动装过/其它程序随包注册),
+      无条件删除会误删别人的注册项导致其字体静默失效。
+      只当注册值 data == [app]\fonts\... 时才删除 (usUninstall 在文件删除前, 路径可比) }
+    DeleteFontRegIfOurs(HKCU, 'HarmonyOS Sans SC (TrueType)', 'HarmonyOS_Sans_SC_Regular.ttf');
+    DeleteFontRegIfOurs(HKCU, 'HarmonyOS Sans SC Medium (TrueType)', 'HarmonyOS_Sans_SC_Medium.ttf');
+    DeleteFontRegIfOurs(HKCU, 'HarmonyOS Sans SC Bold (TrueType)', 'HarmonyOS_Sans_SC_Bold.ttf');
+    DeleteFontRegIfOurs(HKCU, 'JetBrains Mono Regular (TrueType)', 'JetBrainsMono-Regular.ttf');
+    DeleteFontRegIfOurs(HKCU, 'JetBrains Mono Medium (TrueType)', 'JetBrainsMono-Medium.ttf');
+    DeleteFontRegIfOurs(HKCU, 'JetBrains Mono SemiBold (TrueType)', 'JetBrainsMono-SemiBold.ttf');
+    DeleteFontRegIfOurs(HKCU, 'JetBrains Mono Bold (TrueType)', 'JetBrainsMono-Bold.ttf');
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
+    { 注册随包字体到当前用户 (HKCU, 免管理员; 应用 theme.py 按 font_family 名查找) }
+    RegWriteStringValue(HKCU, 'Software\Microsoft\Windows NT\CurrentVersion\Fonts',
+      'HarmonyOS Sans SC (TrueType)', ExpandConstant('{app}\fonts\HarmonyOS_Sans_SC_Regular.ttf'));
+    RegWriteStringValue(HKCU, 'Software\Microsoft\Windows NT\CurrentVersion\Fonts',
+      'HarmonyOS Sans SC Medium (TrueType)', ExpandConstant('{app}\fonts\HarmonyOS_Sans_SC_Medium.ttf'));
+    RegWriteStringValue(HKCU, 'Software\Microsoft\Windows NT\CurrentVersion\Fonts',
+      'HarmonyOS Sans SC Bold (TrueType)', ExpandConstant('{app}\fonts\HarmonyOS_Sans_SC_Bold.ttf'));
+    RegWriteStringValue(HKCU, 'Software\Microsoft\Windows NT\CurrentVersion\Fonts',
+      'JetBrains Mono Regular (TrueType)', ExpandConstant('{app}\fonts\JetBrainsMono-Regular.ttf'));
+    RegWriteStringValue(HKCU, 'Software\Microsoft\Windows NT\CurrentVersion\Fonts',
+      'JetBrains Mono Medium (TrueType)', ExpandConstant('{app}\fonts\JetBrainsMono-Medium.ttf'));
+    RegWriteStringValue(HKCU, 'Software\Microsoft\Windows NT\CurrentVersion\Fonts',
+      'JetBrains Mono SemiBold (TrueType)', ExpandConstant('{app}\fonts\JetBrainsMono-SemiBold.ttf'));
+    RegWriteStringValue(HKCU, 'Software\Microsoft\Windows NT\CurrentVersion\Fonts',
+      'JetBrains Mono Bold (TrueType)', ExpandConstant('{app}\fonts\JetBrainsMono-Bold.ttf'));
     { 完整性标记存在 => 更新覆盖安装, 跳过游戏解压; 缺失 => 解压(含中断自愈) }
     if not FileExists(ExpandConstant('{app}\') + MARKER) then
       ExtractGameChunks;

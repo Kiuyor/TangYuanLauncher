@@ -204,7 +204,13 @@ class RevIni:
                 self._section_lines[k] = v + delta
 
     def _refresh_tail(self, sec: str) -> None:
-        """局部重算指定 section 的 tail(删行后),只扫该 section 范围"""
+        """局部重算指定 section 的 tail(删行后),只扫该 section 范围。
+        语义与 from_text/_reindex 完全一致: tail = 该 section 最后一个
+        非空行(头行/注释/键值行)的索引。
+        重复 section 头 (deep-review 5轮 MEDIUM-7 + 7轮 F1): 同名重复头
+        必须计入 tail 并继续; 交错形态 A→B→A 时扫到 B 的头**不能 break**
+        (否则 tail 截断到首个 A 块), 而是切换当前归属继续扫到文件尾,
+        后续同名头及其内容照常计入 — 差分测试复现过截断路径。"""
         if sec not in self._section_tail:
             return
         lines = self.lines
@@ -213,14 +219,21 @@ class RevIni:
             # 无 header 的 section(理论上不存在),退化为清除
             self._section_tail.pop(sec, None)
             return
+        cur = sec          # 当前扫描归属的 section (与 _reindex 的 section 变量同步)
         tail = h
         for i in range(h + 1, len(lines)):
             stripped = lines[i].strip()
-            if stripped.startswith("["):
-                break
             if not stripped:
                 continue
-            tail = i
+            # 只认行首的 section 头 (行内注释/值里的 [ 不截断)
+            if stripped.startswith("[") and lines[i].lstrip().startswith("["):
+                cur = stripped.strip("[]").strip().lower()
+                if cur == sec:
+                    tail = i
+                continue
+            # 注释行与键值行: 属于当前 section (与 _reindex 一致, 注释也计入 tail)
+            if cur == sec and (stripped.startswith(("#", ";")) or "=" in stripped):
+                tail = i
         self._section_tail[sec] = tail
 
     def _reindex(self) -> None:

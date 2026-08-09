@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>汤圆启动器 — 设计预览 v1</title>
+<style>
+  /* ===== 鸿蒙字体 (HarmonyOS Sans SC, 免费商用, 本地自包含) ===== */
+  @font-face { font-family: "HarmonyOS Sans SC"; font-weight: 400; src: url('fonts/sc/HarmonyOS_SansSC_Regular.woff2') format('woff2'); }
+  @font-face { font-family: "HarmonyOS Sans SC"; font-weight: 500; src: url('fonts/sc/HarmonyOS_SansSC_Medium.woff2') format('woff2'); }
+  @font-face { font-family: "HarmonyOS Sans SC"; font-weight: 700; src: url('fonts/sc/HarmonyOS_SansSC_Bold.woff2') format('woff2'); }
+  @font-face { font-family: "HarmonyOS Sans SC"; font-weight: 800; src: url('fonts/sc/HarmonyOS_SansSC_Black.woff2') format('woff2'); }
+
+  /* ===== 设计令牌 (docs/DESIGN.md) ===== */
+  :root {
+    --bg-deep: #0c0e14;
+    --bg-main: #0f1117;
+    --card: #161922;
+    --card-2: #1e293b;
+    --sidebar: #11141d;
+    --brand: #6495ED;
+    --brand-hover: #4F7FE0;
+    --brand-light: #9DB9F3;
+    --brand-soft: #8FB1F0;
+    --blue: #6495ED;
+    --blue-light: #8FB1F0;
+    --green: #10b981;
+    --text-main: #ffffff;
+    --text-2: #e2e8f0;
+    --text-3: #a0aec0;
+    --text-4: #64748b;
+    --text-disabled: #6b7280;
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --border-visible: rgba(255, 255, 255, 0.1);
+    --border-brand: rgba(100, 149, 237, 0.3);
+    --launch-busy: #4F7FE0;
+    --launch-done: #10b981;
+    --launch-glow: rgba(16, 185, 129, 0.4);
+    --font-cn: "HarmonyOS Sans SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+    --font-mono: "JetBrains Mono", Consolas, monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  /* SVG 图标统一尺寸 (跟随父级字号) */
+  svg.ic { width: 1em; height: 1em; display: inline-block; vertical-align: -0.15em; flex-shrink: 0; }
+
+  body {
+    background: #05060a;
+    font-family: var(--font-cn);
+    color: var(--text-main);
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  /* ===== 预览工具栏 (非产品 UI) ===== */
+  .toolbar {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    background: #0a0b10;
+    padding: 12px 16px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    margin-bottom: 24px;
+    max-width: 1080px;
+    margin-left: auto; margin-right: auto;
+  }
+  .toolbar button {
+    font-family: var(--font-cn);
+    font-size: 13px; font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-visible);
+    background: var(--card-2);
+    color: var(--text-2);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .toolbar button.active {
+    background: var(--brand);
+    color: #fff;
+    border-color: transparent;
+  }
+  .toolbar .zoom-group { display: flex; gap: 4px; }
+  .toolbar .zoom-group button { padding: 6px 10px; font-size: 12px; }
+  .toolbar .hint { color: var(--text-4); font-size: 12px; margin-left: 8px; }
+
+  /* ===== 画布容器 ===== */
+  .stage {
+    display: flex; justify-content: center; align-items: flex-start;
+    min-height: 600px;
+  }
+  .stage.zoomed-0 { transform: scale(0.75); transform-origin: top center; }
+  .stage.zoomed-2 { transform: scale(1.25); transform-origin: top center; }
+
+  /* ===== 窗口外壳 ===== */
+  .window {
+    border-radius: 16px;
+    border: 1px solid var(--border-visible);
+    overflow: hidden;
+    position: relative;
+    background: var(--bg-deep);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+    flex-shrink: 0;
+  }
+  .window-launcher { width: 360px; height: 510px; }
+  .window-edit { width: 784px; height: 600px; }
+  .window-label {
+    position: absolute; top: -28px; left: 0;
+    font-size: 12px; color: var(--text-4); font-weight: 500;
+  }
+
+  /* ===== 标题栏 ===== */
+  .titlebar {
+    height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px;
+    position: relative; z-index: 1;
+    border-bottom: 1px solid var(--border-subtle);
+    user-select: none;
+  }
+  .titlebar-left { display: flex; align-items: center; gap: 10px; }
+  .win-controls { display: flex; gap: 6px; }
+  .win-btn {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 6px; color: var(--text-3);
+    cursor: pointer; transition: all 0.2s;
+    font-size: 14px;
+  }
+  .win-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+  .win-btn.close:hover { background: #ef4444; color: #fff; }
+
+  /* ===== 版本徽章 ===== */
+  .version-tag {
+    background: rgba(100, 149, 237, 0.2);
+    color: var(--brand-light);
+    border: 1px solid var(--border-brand);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 10px; font-weight: 700;
+    font-family: var(--font-mono);
+    user-select: none;
+  }
+
+  /* ===== 主页 ===== */
+  .launcher-body {
+    height: calc(100% - 56px);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; z-index: 1;
+    background: var(--bg-main);
+  }
+  .launcher-card {
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center;
+    padding: 24px 36px 48px;
+    gap: 0;
+  }
+  .avatar {
+    width: 100px; height: 100px;
+    border-radius: 50%;
+    background: var(--card-2);
+    border: 2px solid var(--border-visible);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    user-select: none;
+  }
+  .avatar span {
+    font-size: 36px; font-weight: 700;
+    color: var(--brand-light);
+  }
+  .nickname {
+    margin-top: 24px;
+    font-size: 18px; font-weight: 700;
+    max-width: 100%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    user-select: none;
+  }
+
+  /* 服务器监控 (主页,绿点+在线人数) */
+  .server-monitor {
+    display: flex; align-items: center; justify-content: center;
+    gap: 7px;
+    margin-top: 14px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-subtle);
+    user-select: none;
+  }
+  .server-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-4);
+    flex-shrink: 0;
+  }
+  .server-dot.online { background: var(--green); box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15); }
+  .server-dot.offline { background: var(--text-4); }
+  .server-monitor .sm-label { font-size: 15px; color: var(--text-4); font-family: var(--font-mono); }
+  .server-monitor .sm-count { font-size: 15px; font-weight: 600; color: var(--text-2); font-family: var(--font-mono); }
+  .server-monitor.offline .sm-count { color: var(--text-4); }
+
+  .btn-launch {
+    display: flex; align-items: center; justify-content: center;
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    color: #fff;
+    background: var(--brand);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    margin-top: 24px;
+    user-select: none;
+  }
+  .btn-launch:hover {
+    background: var(--brand-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+  .btn-launch:active { transform: translateY(0) scale(0.98); }
+  .btn-launch .ic { font-size: 44px; }
+
+  /* ===== 编辑页 ===== */
+  .edit-root { display: flex; flex-direction: column; height: 100%; position: relative; z-index: 1; }
+
+  .edit-titlebar {
+    height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-deep);
+    user-select: none;
+  }
+  .edit-titlebar .left { display: flex; align-items: center; gap: 8px; }
+  .edit-titlebar .right { display: flex; align-items: center; gap: 12px; }
+
+  .btn-bar {
+    display: flex; align-items: center; gap: 6px;
+    height: 34px; padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-2);
+    font-size: 12px; font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-bar:hover { background: rgba(255, 255, 255, 0.07); border-color: var(--border-visible); }
+  .btn-bar .ic { margin-right: 5px; font-size: 14px; }
+  .btn-bar.primary {
+    background: var(--brand);
+    border-color: transparent;
+    color: #fff;
+    font-weight: 700;
+  }
+  .btn-bar.primary:hover { background: var(--brand-hover); }
+
+  .divider-v { width: 1px; height: 26px; background: var(--border-subtle); }
+
+  .edit-body { display: flex; flex: 1; overflow: hidden; }
+
+  /* 导航栏 */
+  .sidebar {
+    width: 96px;
+    background: var(--sidebar);
+    border-right: 1px solid var(--border-subtle);
+    padding: 8px 0;
+    display: flex; flex-direction: column; gap: 4px;
+    user-select: none;
+  }
+  .nav-item {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px;
+    height: 80px;
+    border-radius: 8px;
+    font-size: 10px;
+    color: var(--text-4);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    border-left: 3px solid transparent;
+  }
+  .nav-item .ic { font-size: 20px; }
+  .nav-item:hover { background: rgba(255, 255, 255, 0.04); color: var(--text-3); }
+  .nav-item.active {
+    background: rgba(100, 149, 237, 0.1);
+    color: var(--blue-light);
+    border-left: 3px solid var(--blue);
+  }
+
+  /* 内容区 */
+  .content {
+    flex: 1;
+    background: var(--bg-main);
+    padding: 20px;
+    overflow-y: auto;
+    position: relative;
+  }
+  .content::-webkit-scrollbar { width: 6px; }
+  .content::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+  .content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+  .content::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+  .page-head { margin-bottom: 16px; }
+  .page-head .kicker {
+    font-family: var(--font-mono);
+    font-size: 10px; color: var(--brand-light);
+    opacity: 0.8; letter-spacing: 0.05em;
+  }
+  .page-head h2 { font-size: 20px; font-weight: 800; margin-top: 2px; }
+  .page-head p { font-size: 12px; color: var(--text-4); margin-top: 4px; }
+
+  /* 配置卡片 */
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .field-grid .config-card { margin-bottom: 0; }
+  .field-grid .config-card:hover { transform: none; }
+  /* 双列卡控件贴底对齐: 描述行数不同导致 row-top 高度差, 控件 margin-top:auto 贴底,
+     同行两张等高卡片控件底部对齐 → 顶部也对齐 (select 与 input 同高) */
+  .field-grid .config-card { display: flex; flex-direction: column; }
+  .field-grid .config-card .row-top { flex-shrink: 0; }
+  .field-grid .config-card > input,
+  .field-grid .config-card > select { margin-top: auto; }
+  .config-card {
+    padding: 16px;
+    border-radius: 8px;
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    margin-bottom: 10px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .config-card:hover {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(100, 149, 237, 0.3);
+    transform: translateX(4px);
+  }
+  .config-card .row-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .config-card .card-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 700;
+  }
+  .card-desc { font-size: 12px; color: var(--text-4); margin-top: 2px; }
+
+  .code-tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    background: rgba(100, 149, 237, 0.1);
+    color: var(--blue);
+    padding: 2px 6px;
+    border-radius: 4px;
+    user-select: none;
+  }
+
+  .input-dark {
+    width: 100%; height: 40px;
+    padding: 0 12px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-visible);
+    color: var(--text-main);
+    font-size: 14px;
+    font-family: var(--font-cn);
+    transition: all 0.2s;
+    outline: none;
+  }
+  .input-dark:focus {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 2px rgba(100, 149, 237, 0.2);
+  }
+  .input-dark::placeholder { color: var(--text-4); }
+  .input-dark.mono { font-family: var(--font-mono); font-size: 12px; }
+  textarea.input-dark { height: auto; min-height: 84px; padding: 10px 12px; resize: none; line-height: 1.6; }
+
+  /* 开关 */
+  .switch { display: flex; align-items: center; gap: 10px; }
+  .switch-track {
+    width: 40px; height: 22px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .switch-track.on { background: var(--brand); }
+  .switch-track .thumb {
+    position: absolute; top: 2px; left: 2px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff;
+    transition: left 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  }
+  .switch-track.on .thumb { left: 20px; }
+  .switch-label { font-size: 12px; color: var(--text-3); }
+
+  /* 下拉 (自定义样式) */
+  .select-dark {
+    display: block;   /* 消除 inline-block baseline 偏移: appearance:none select 在 Chrome 会偏离 input 14px */
+    width: 100%; height: 40px;
+    padding: 0 12px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-visible);
+    color: var(--text-main);
+    font-size: 13px;
+    font-family: var(--font-cn);
+    transition: all 0.2s;
+    outline: none;
+    appearance: none;
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a0aec0' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+  .select-dark:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(100, 149, 237, 0.2); }
+  .select-dark option { background: var(--card); }
+
+  /* chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  /* 竖排 chips (加载器右栏推荐项) */
+  .chips.col { flex-direction: column; align-items: stretch; margin-top: 0; overflow: hidden; }
+  .chips.col .chip { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; width: 100%; }
+  /* 启动命令左右分栏: 左 3 (手动输入) : 右 2 (推荐项) */
+  .launch-split {
+    display: grid;
+    grid-template-columns: 3fr minmax(0, 2fr);   /* minmax(0,2fr): 防止右栏内容 min-content 撑宽破坏 3:2 */
+    gap: 14px;
+    align-items: stretch;
+  }
+  .launch-split textarea.input-dark.mono { height: 100%; min-height: 170px; font-size: 16px; }
+  .rec-panel {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .rec-title {
+    font-size: 11px; font-weight: 600;
+    color: var(--text-3);
+    margin-bottom: 8px;
+    user-select: none;
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border-visible);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-3);
+    font-size: 11px;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    transition: all 0.2s;
+    user-select: none;
+  }
+  .chip:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-2); }
+  .chip.added {
+    background: rgba(100, 149, 237, 0.18);
+    border-color: var(--border-brand);
+    color: var(--brand-light);
+  }
+
+  /* 工具卡片 */
+  .tool-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .tool-card {
+    padding: 16px;
+    border-radius: 8px;
+    background: var(--card);
+    border: 1px solid var(--border-subtle);
+    margin-bottom: 0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .tool-card:hover {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(100, 149, 237, 0.3);
+  }
+  .tool-card .tool-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .tool-card .tool-name { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .cat-tag {
+    font-size: 10px; font-weight: 600;
+    padding: 2px 8px; border-radius: 4px;
+    background: rgba(100, 149, 237, 0.15);
+    color: var(--brand-light);
+    border: 1px solid var(--border-brand);
+    user-select: none;
+  }
+  .risk-tag { font-size: 11px; font-weight: 600; user-select: none; }
+  .risk-low { color: var(--green); }
+  .risk-mid { color: #f59e0b; }
+  .risk-high { color: #ef4444; }
+
+  .btn-run {
+    display: flex; align-items: center; gap: 5px;
+    height: 32px; padding: 0 14px;
+    border-radius: 8px;
+    background: var(--brand);
+    color: #fff;
+    font-size: 12px; font-weight: 700;
+    border: none; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-run:hover { background: var(--brand-hover); }
+  .btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
+  .tool-status { font-size: 11px; color: var(--text-4); text-align: center; margin-top: 6px; }
+  .tool-status.running { color: #f59e0b; }
+  .tool-status.ok { color: var(--green); }
+  .tool-status.fail { color: #ef4444; }
+
+  /* 状态栏 */
+  .statusbar {
+    height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px;
+    background: var(--bg-deep);
+    border-top: 1px solid var(--border-subtle);
+    user-select: none;
+  }
+  .status-msg { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); }
+  .status-msg .ic { font-size: 15px; }
+  .status-msg.ok { color: var(--green); }
+  .statusbar-right { display: flex; align-items: center; gap: 10px; }
+  .enc-group { display: flex; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 3px; border: 1px solid var(--border-subtle); }
+  .enc-btn {
+    padding: 5px 12px; border-radius: 6px;
+    font-size: 11px; font-weight: 600;
+    color: var(--text-4);
+    cursor: pointer; transition: all 0.2s;
+    user-select: none;
+  }
+  .enc-btn.active { background: var(--brand); color: #fff; }
+
+  /* 隐藏态 */
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ===== SVG 图标库 (lucide 风格, stroke=currentColor) ===== -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+  </symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
+  </symbol>
+  <symbol id="i-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+  </symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>
+  </symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
+  </symbol>
+  <symbol id="i-folder-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>
+  </symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+  </symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+  </symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+  </symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/>
+  </symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="6 3 20 12 6 21 6 3"/>
+  </symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+  </symbol>
+  <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/>
+  </symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M5 12h14"/>
+  </symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+  </symbol>
+</svg>
+
+<div class="toolbar">
+  <button id="tab-launcher" class="active" onclick="switchView('launcher')"><svg class="ic"><use href="#i-home"/></svg> 主页启动台</button>
+  <button id="tab-edit" onclick="switchView('edit')"><svg class="ic"><use href="#i-settings"/></svg> 配置编辑页</button>
+  <div class="zoom-group">
+    <button onclick="setZoom(0)">75%</button>
+    <button class="active" onclick="setZoom(1)">100%</button>
+    <button onclick="setZoom(2)">125%</button>
+  </div>
+  <span class="hint">v1 · 矢车菊蓝纯色主题 · 点击可交互</span>
+</div>
+
+<div class="stage" id="stage">
+
+  <!-- ==================== 主页启动台 ==================== -->
+  <div class="window window-launcher" id="view-launcher">
+    <div class="window-label">主页启动台 360×510</div>
+
+    <div class="titlebar">
+      <div class="titlebar-left">
+        <span class="version-tag">v1.35.7.7</span>
+        <span style="font-size:18px; font-weight:700; color:var(--text-2);">汤圆启动器</span>
+      </div>
+      <div class="win-controls">
+        <div class="win-btn" title="配置" onclick="switchView('edit')"><svg class="ic"><use href="#i-settings"/></svg></div>
+        <div class="win-btn"><svg class="ic"><use href="#i-minus"/></svg></div>
+        <div class="win-btn close"><svg class="ic"><use href="#i-x"/></svg></div>
+      </div>
+    </div>
+
+    <div class="launcher-body">
+      <div class="launcher-card">
+        <div class="avatar"><span>汤</span></div>
+        <div class="nickname">米汤</div>
+        <!-- 服务器监控: 示例值仅用于预览 UI 形态; 真实实现须 A2S 查询 ConnectServer 地址,
+             查询失败显示灰点「离线」, 禁止展示编造人数 -->
+        <div class="server-monitor" id="server-monitor" title="点击切换在线/离线演示" onclick="toggleServer()">
+          <span class="server-dot online" id="server-dot"></span>
+          <span class="sm-label" id="sm-label">在线</span>
+          <span class="sm-count" id="sm-count">12 人</span>
+        </div>
+
+        <div class="btn-launch" id="btn-start" onclick="startGame()" title="启动游戏">
+          <svg class="ic"><use href="#i-rocket"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 配置编辑页 ==================== -->
+  <div class="window window-edit hidden" id="view-edit">
+    <div class="window-label">配置编辑页 784×600</div>
+
+    <div class="edit-root">
+      <!-- 头部 -->
+      <div class="edit-titlebar">
+        <div class="left">
+          <div class="btn-bar" onclick="switchView('launcher')"><svg class="ic"><use href="#i-arrow-left"/></svg>返回</div>
+          <div class="divider-v"></div>
+          <div class="btn-bar"><svg class="ic"><use href="#i-folder-open"/></svg>打开 cfg 文件夹</div>
+          <div class="btn-bar"><svg class="ic"><use href="#i-folder"/></svg>指定目录</div>
+          <div class="btn-bar"><svg class="ic"><use href="#i-file"/></svg>打开文件</div>
+          <div class="divider-v"></div>
+          <button class="btn-bar primary" style="height:34px; padding:0 20px;"><svg class="ic"><use href="#i-save"/></svg>保存</button>
+        </div>
+        <div class="right">
+          <div class="win-controls">
+            <div class="win-btn"><svg class="ic"><use href="#i-minus"/></svg></div>
+            <div class="win-btn close"><svg class="ic"><use href="#i-x"/></svg></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="edit-body">
+        <!-- 导航栏 -->
+        <div class="sidebar">
+          <div class="nav-item active" onclick="navTo(this,0)">
+            <svg class="ic" style="font-size:20px;"><use href="#i-user"/></svg><span>常用设置</span>
+          </div>
+          <div class="nav-item" onclick="navTo(this,1)">
+            <svg class="ic" style="font-size:20px;"><use href="#i-rocket"/></svg><span>加载器</span>
+          </div>
+          <div class="nav-item" onclick="navTo(this,2)">
+            <svg class="ic" style="font-size:20px;"><use href="#i-wrench"/></svg><span>修复工具</span>
+          </div>
+        </div>
+
+        <!-- 内容区 -->
+        <div class="content" id="content-area">
+
+          <!-- 常用设置 -->
+          <div class="page-group" id="group-0">
+            <div class="page-head">
+              <div class="kicker">// CFG.STEAMCLIENT</div>
+              <h2>常用设置</h2>
+              <p>游戏内昵称、段位伪装、界面语言 · 保存后自动备份 · 重启游戏生效</p>
+            </div>
+
+            <div class="field-grid">
+
+            <div class="config-card">
+              <div class="row-top">
+                <div>
+                  <div class="card-title">界面语言 <span class="code-tag">Emulator.Language</span></div>
+                  <div class="card-desc">游戏客户端显示语言</div>
+                </div>
+              </div>
+              <select class="select-dark">
+                <option selected>简体中文</option><option>繁体中文</option><option>英文</option>
+                <option>俄语</option><option>德语</option><option>法语</option>
+              </select>
+            </div>
+
+            <div class="config-card">
+              <div class="row-top">
+                <div>
+                  <div class="card-title">自动进入服务器 <span class="code-tag">Loader.ConnectServer</span></div>
+                  <div class="card-desc">启动游戏后自动连接该服务器(留空则不自动进服)。格式 IP:端口</div>
+                </div>
+              </div>
+              <input class="input-dark mono" value="127.0.0.1:27015" placeholder="如: 127.0.0.1:27015">
+            </div>
+
+            <div class="config-card">
+              <div class="row-top">
+                <div>
+                  <div class="card-title">游戏昵称 <span class="code-tag">steamclient.PlayerName</span></div>
+                  <div class="card-desc">显示在游戏内与服务器列表中的名字</div>
+                </div>
+              </div>
+              <input class="input-dark" value="米汤" placeholder="输入你的昵称">
+            </div>
+
+            <div class="config-card">
+              <div class="row-top">
+                <div>
+                  <div class="card-title">战队标签 <span class="code-tag">steamclient.ClanTag</span></div>
+                  <div class="card-desc">显示在昵称前的短标签,留空则不显示</div>
+                </div>
+              </div>
+              <input class="input-dark" value="[CN]" placeholder="如: [CN]">
+            </div>
+
+            <div class="config-card">
+              <div class="row-top">
+                <div>
+                  <div class="card-title">段位设置 <span class="code-tag">steamclient.RankLevel</span></div>
+                  <div class="card-desc">别人看到的你的竞技段位(官方名+俗称)</div>
+                </div>
+              </div>
+              <select class="select-dark">
+                <option selected>全球精英 (大地球)</option><option>至尊大师 (小地球)</option>
+                <option>传奇之鹰 (老鹰)</option><option>大师守卫精英 (菊花)</option>
+              </select>
+            </div>
+
+            <div class="config-card">
+              <div class="row-top">
+                <div>
+                  <div class="card-title">勋章等级 <span class="code-tag">steamclient.PrivatRank</span></div>
+                  <div class="card-desc">0 = 无勋章,1~40 为勋章等级</div>
+                </div>
+              </div>
+              <input class="input-dark" value="1">
+            </div>
+
+            </div>
+          </div>
+
+          <!-- 加载器 -->
+          <div class="page-group hidden" id="group-1">
+            <div class="page-head">
+              <div class="kicker">// CFG.LOADER</div>
+              <h2>加载器</h2>
+              <p>启动参数与主进程设置</p>
+            </div>
+
+            <div class="config-card">
+              <div class="row-top">
+                <div>
+                  <div class="card-title">启动命令 <span class="code-tag">Loader.ProcName</span></div>
+                  <div class="card-desc">游戏启动参数,每个参数一行,保存时自动合并。点击右侧推荐项一键添加</div>
+                </div>
+              </div>
+              <div class="launch-split">
+                <!-- 左栏 5: 手动输入启动项 -->
+                <textarea class="input-dark mono" placeholder="输入启动参数,每行一个">csgo.exe -steam -silent -high +sv_lan 1
+-novid
+-tickrate 128 +cl_cmdrate 128 +cl_updaterate 128</textarea>
+                <!-- 右栏 1: 推荐启动项选择 -->
+                <div class="rec-panel">
+                  <div class="rec-title">推荐启动项</div>
+                  <div class="chips col">
+                    <span class="chip added" onclick="toggleChip(this)">✓ -high</span>
+                    <span class="chip added" onclick="toggleChip(this)">✓ -novid</span>
+                    <span class="chip" onclick="toggleChip(this)">-nojoy</span>
+                    <span class="chip" onclick="toggleChip(this)">-w 1920 -h 1080</span>
+                    <span class="chip" onclick="toggleChip(this)">128 tick 参数</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 修复工具 -->
+          <div class="page-group hidden" id="group-2">
+            <div class="page-head">
+              <div class="kicker">// CFG.TOOLS</div>
+              <h2>修复工具</h2>
+              <p>一键运行 CS:GO 内置维护脚本:清缓存、修复 Steam 错误</p>
+            </div>
+
+            <div class="config-card" style="display:flex; align-items:center; gap:12px;">
+              <input class="input-dark" value="120" style="width:110px; text-align:center;" placeholder="120">
+              <span style="font-size:12px; color:var(--text-4);">超过该秒数未结束将被强制终止,防止脚本卡死</span>
+            </div>
+
+            <div class="tool-grid">
+
+            <div class="tool-card">
+              <div class="tool-top">
+                <div class="tool-name">
+                  <span class="cat-tag">缓存清理</span>
+                  <span class="risk-tag risk-low">风险:低</span>
+                </div>
+                <button class="btn-run" onclick="runTool(this)"><svg class="ic"><use href="#i-play"/></svg><span>运行</span></button>
+              </div>
+              <div class="tool-name" style="font-size:14px;">清除武器皮肤缓存</div>
+              <div class="tool-status" style="text-align:right;">待运行</div>
+            </div>
+
+            <div class="tool-card">
+              <div class="tool-top">
+                <div class="tool-name">
+                  <span class="cat-tag">注册表修复</span>
+                  <span class="risk-tag risk-mid">风险:中</span>
+                </div>
+                <button class="btn-run" onclick="runTool(this)"><svg class="ic"><use href="#i-play"/></svg><span>运行</span></button>
+              </div>
+              <div class="tool-name" style="font-size:14px;">修复 Steam 客户端错误</div>
+              <div class="tool-status" style="text-align:right;">待运行</div>
+            </div>
+
+            <div class="tool-card">
+              <div class="tool-top">
+                <div class="tool-name">
+                  <span class="cat-tag">注册表修复</span>
+                  <span class="risk-tag risk-low">风险:低</span>
+                </div>
+                <button class="btn-run" onclick="runTool(this)"><svg class="ic"><use href="#i-play"/></svg><span>运行</span></button>
+              </div>
+              <div class="tool-name" style="font-size:14px;">清理 RevEMU 注册表残留</div>
+              <div class="tool-status" style="text-align:right;">待运行</div>
+            </div>
+
+            <div class="tool-card">
+              <div class="tool-top">
+                <div class="tool-name">
+                  <span class="cat-tag">Loader</span>
+                  <span class="risk-tag risk-low">风险:低</span>
+                </div>
+                <button class="btn-run" onclick="runTool(this)"><svg class="ic"><use href="#i-play"/></svg><span>运行</span></button>
+              </div>
+              <div class="tool-name" style="font-size:14px;">安装优化 Loader (免残留)</div>
+              <div class="tool-status" style="text-align:right;">待运行</div>
+            </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 状态栏 -->
+      <div class="statusbar">
+        <div class="status-msg ok">
+          <svg class="ic" style="font-size:15px;"><use href="#i-check-circle"/></svg>
+        </div>
+        <div class="statusbar-right">
+          <div class="enc-group">
+            <span class="enc-btn active" onclick="setEnc(this)">ANSI</span>
+            <span class="enc-btn" onclick="setEnc(this)">UTF-8</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // ===== 视图切换 =====
+  function switchView(name) {
+    document.getElementById('view-launcher').classList.toggle('hidden', name !== 'launcher');
+    document.getElementById('view-edit').classList.toggle('hidden', name !== 'edit');
+    document.getElementById('tab-launcher').classList.toggle('active', name === 'launcher');
+    document.getElementById('tab-edit').classList.toggle('active', name === 'edit');
+  }
+
+  // ===== 缩放 =====
+  function setZoom(level) {
+    const stage = document.getElementById('stage');
+    stage.classList.toggle('zoomed-0', level === 0);
+    stage.classList.toggle('zoomed-2', level === 2);
+    document.querySelectorAll('.zoom-group button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.zoom-group button')[level].classList.add('active');
+  }
+
+  // ===== 导航 =====
+  function navTo(el, idx) {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    for (let i = 0; i < 3; i++) {
+      document.getElementById('group-' + i).classList.toggle('hidden', i !== idx);
+    }
+  }
+
+  // ===== 服务器状态演示 (在线/离线切换; 真实实现须 A2S 查询, 离线不显示人数) =====
+  let serverOnline = true;
+  function toggleServer() {
+    serverOnline = !serverOnline;
+    const mon = document.getElementById('server-monitor');
+    const dot = document.getElementById('server-dot');
+    const label = document.getElementById('sm-label');
+    const count = document.getElementById('sm-count');
+    if (serverOnline) {
+      mon.classList.remove('offline');
+      dot.classList.add('online');
+      dot.classList.remove('offline');
+      label.textContent = '在线';
+      count.textContent = '12 人';
+      count.style.display = '';
+    } else {
+      mon.classList.add('offline');
+      dot.classList.remove('online');
+      dot.classList.add('offline');
+      label.textContent = '离线';
+      count.style.display = 'none';   // 离线禁止展示编造人数
+    }
+  }
+
+  // ===== 启动游戏演示 =====
+  function startGame() {
+    const btn = document.getElementById('btn-start');
+    if (btn.classList.contains('launching')) return;
+    const cs = getComputedStyle(document.documentElement);
+    btn.classList.add('launching');
+    btn.style.background = cs.getPropertyValue('--launch-busy').trim();
+    btn.title = '启动中…';
+    setTimeout(() => {
+      btn.style.background = cs.getPropertyValue('--launch-done').trim();
+      btn.style.boxShadow = '0 4px 20px ' + cs.getPropertyValue('--launch-glow').trim();
+      btn.title = '游戏运行中';
+      setTimeout(() => {
+        btn.style.background = '';
+        btn.style.boxShadow = '';
+        btn.title = '启动游戏';
+        btn.classList.remove('launching');
+      }, 4000);
+    }, 1500);
+  }
+
+  // ===== chips =====
+  function toggleChip(el) {
+    el.classList.toggle('added');
+    el.textContent = el.classList.contains('added') ? '✓ ' + el.textContent.replace(/^✓ /, '') : el.textContent.replace(/^✓ /, '');
+  }
+
+  // ===== 工具运行演示 =====
+  function runTool(btn) {
+    const card = btn.closest('.tool-card');
+    const status = card.querySelector('.tool-status');
+    const label = btn.querySelector('span');
+    const icon = btn.querySelector('use');
+    if (btn.disabled) return;
+    btn.disabled = true;
+    icon.setAttribute('href', '#i-clock');
+    label.textContent = '运行中';
+    status.textContent = '运行中…';
+    status.className = 'tool-status running';
+    setTimeout(() => {
+      btn.disabled = false;
+      icon.setAttribute('href', '#i-play');
+      label.textContent = '运行';
+      status.textContent = '完成';
+      status.className = 'tool-status ok';
+      setTimeout(() => {
+        status.textContent = '待运行';
+        status.className = 'tool-status';
+      }, 3000);
+    }, 1500);
+  }
+
+  // ===== 编码切换 =====
+  function setEnc(el) {
+    document.querySelectorAll('.enc-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+  }
+</script>
+
+</body>
+</html>

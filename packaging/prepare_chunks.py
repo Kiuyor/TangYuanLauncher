@@ -26,8 +26,10 @@ EXT_ITEMS_BIN = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 
 PATCHES = [
     # (相对路径, 旧字节, 新字节, 幂等判定字节)
+    # 注意: 新字节末尾不带空格 — 原实现 `b"timeout /t 2 "` 尾随空格会让
+    # `timeout /t 10 /nobreak` 变成 `timeout /t 2  /nobreak` 双空格 (deep-review 6轮 Low-7)
     ("startgame.bat",
-     b"timeout /t 10", b"timeout /t 2 ",
+     b"timeout /t 10", b"timeout /t 2",
      b"timeout /t 2"),
     ("rev.ini",
      b"Language = English", b"Language = schinese",
@@ -66,7 +68,21 @@ def apply_patch(game_dir: str, rel: str, old: bytes, new: bytes, done_marker: by
 
 
 def apply_file_replacement(game_dir: str, rel: str, src: str, expect_md5: str) -> bool:
-    """整文件替换: 原版 -> 增强版; 幂等(目标 md5 已匹配跳过); 改前备份 .bak_<ts>。返回是否改动。"""
+    """整文件替换: 原版 -> 增强版; 幂等(目标 md5 已匹配跳过); 改前备份 .bak_<ts>。返回是否改动。
+
+    expect_md5: FILE_REPLACEMENTS 声明的目标 md5。运行时对 src 实测并与常量断言一致
+    (deep-review 6轮 Low-5): 常量是手工维护的, 若更新 assets 后忘改常量, 幂等判定会
+    永不命中(每轮生成新 .bak 堆积)或误跳过 — 实测不一致直接报错, 强制同步常量。
+    """
+    if not os.path.isfile(src):
+        print(f"  [skip] {rel}: 源文件缺失 {src}")
+        return False
+    with open(src, "rb") as f:
+        new = f.read()
+    src_md5 = hashlib.md5(new).hexdigest()
+    if src_md5 != expect_md5:
+        sys.exit(f"[FATAL] {rel}: 源文件 md5 与常量不一致 (src={src_md5} expect={expect_md5}). "
+                 f"更新 assets 后请同步 FILE_REPLACEMENTS 常量 (deep-review 6轮 Low-5)")
     p = os.path.join(game_dir, rel)
     if not os.path.isfile(p):
         print(f"  [skip] {rel}: 不存在")
@@ -76,11 +92,6 @@ def apply_file_replacement(game_dir: str, rel: str, src: str, expect_md5: str) -
     if hashlib.md5(cur).hexdigest() == expect_md5:
         print(f"  [skip] {rel}: 已是目标版本")
         return False
-    if not os.path.isfile(src):
-        print(f"  [skip] {rel}: 源文件缺失 {src}")
-        return False
-    with open(src, "rb") as f:
-        new = f.read()
     bak = p + ".bak_" + time.strftime("%Y%m%d%H%M%S")
     with open(bak, "wb") as f:
         f.write(cur)
@@ -91,11 +102,18 @@ def apply_file_replacement(game_dir: str, rel: str, src: str, expect_md5: str) -
 
 
 def collect_files(game_dir: str):
-    """返回 [(相对路径含反斜杠, 大小)] 按路径排序。"""
+    """返回 [(相对路径含反斜杠, 大小)] 按路径排序。
+
+    排除补丁备份 .bak_<ts> (deep-review 6轮): _patch_file/_replace_file 生成的
+    备份会残留目录, 不打进发行分块 (否则玩家安装后目录多出 2 个冗余备份,
+    且每轮重跑 prepare_chunks 累积更多 .bak 污染分块)。
+    """
     out = []
     for root, dirs, files in os.walk(game_dir):
         dirs.sort()
         for fn in sorted(files):
+            if fn.endswith(".bak_") or ".bak_" in fn:
+                continue
             full = os.path.join(root, fn)
             rel = os.path.relpath(full, game_dir)
             out.append((rel.replace("/", "\\"), os.path.getsize(full)))
@@ -116,8 +134,56 @@ def chunk_files(files, target):
     return chunks
 
 
-def compress_chunk(game_dir: str, out_dir: str, idx: int, items) -> None:
+def _chunk_fingerprint(game_dir: str, items) -> str:
+    """块内文件指纹: (rel, size, mtime) 组合的 sha256。
+    增量跳过判断 (deep-review 6轮 Low-6): 内容未变的块不重压。
+    mtime 用整数纳秒 (st_mtime_ns), 避免秒级精度误判同秒修改。"""
+    import hashlib as _h
+    h = _h.sha256()
+    for rel, sz in items:
+        full = os.path.join(game_dir, rel)
+        try:
+            mt = os.stat(full).st_mtime_ns
+        except OSError:
+            mt = 0
+        h.update(f"{rel}|{sz}|{mt}\n".encode())
+    return h.hexdigest()
+
+
+def _load_manifest(out_dir: str) -> dict:
+    """读增量 manifest: {idx: fingerprint}。不存在/损坏返回空。"""
+    p = os.path.join(out_dir, "manifest.json")
+    try:
+        import json
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return {int(k): v for k, v in data.items()}
+    except (OSError, ValueError, TypeError):
+        pass
+    return {}
+
+
+def _save_manifest(out_dir: str, manifest: dict) -> None:
+    """写增量 manifest (块指纹缓存, 供下次重跑跳过未变块)。"""
+    import json
+    p = os.path.join(out_dir, "manifest.json")
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=1)
+    os.replace(tmp, p)
+
+
+def compress_chunk(game_dir: str, out_dir: str, idx: int, items,
+                   manifest: dict) -> bool:
+    """压缩单块; 指纹未变且产物存在时跳过 (增量缓存, deep-review 6轮 Low-6)。
+    返回是否实际压缩 (False = 命中缓存跳过)。"""
     name = f"game.part{idx:02d}.7z"
+    fp = _chunk_fingerprint(game_dir, items)
+    out = os.path.join(out_dir, name)
+    if manifest.get(idx) == fp and os.path.isfile(out) and os.path.getsize(out) > 0:
+        print(f"  [{name}] 未变, 跳过 (增量缓存)", flush=True)
+        return False
     tmp = os.path.join(out_dir, f"game.part{idx:02d}.tmp7z")  # 先写临时, 原子替换占位文件
     if os.path.exists(tmp):
         os.remove(tmp)
@@ -130,9 +196,10 @@ def compress_chunk(game_dir: str, out_dir: str, idx: int, items) -> None:
     r = subprocess.run(cmd, cwd=game_dir, capture_output=True, check=False)
     if r.returncode != 0:
         sys.exit(f"7z 失败 ({name}): {r.stderr.decode('utf-8', 'replace')[-800:]}")
-    os.replace(tmp, os.path.join(out_dir, name))
-    sz = os.path.getsize(os.path.join(out_dir, name))
+    os.replace(tmp, out)
+    sz = os.path.getsize(out)
     print(f"  [{name}] OK {sz/1024/1024:.1f} MB", flush=True)
+    return True
 
 
 def main() -> None:
@@ -152,9 +219,13 @@ def main() -> None:
         sys.exit(f"[FATAL] 游戏目录无文件: {game_dir} (检查路径是否被 shell 转义)")
     chunks = chunk_files(files, CHUNK_BYTES)
     print(f"  分为 {len(chunks)} 块 (目标 {TARGET_CHUNK_MB}MB/块)")
-    print("== 3/3 分块压缩")
+    # 增量缓存 (deep-review 6轮 Low-6): 指纹未变的块跳过重压
+    manifest = _load_manifest(out_dir)
+    print("== 3/3 分块压缩 (增量: 未变块跳过)")
     for i, items in enumerate(chunks):
-        compress_chunk(game_dir, out_dir, i, items)
+        compress_chunk(game_dir, out_dir, i, items, manifest)
+        manifest[i] = _chunk_fingerprint(game_dir, items)
+    _save_manifest(out_dir, manifest)
     iss = os.path.join(os.path.dirname(out_dir), "chunks.iss")
     with open(iss, "w", encoding="utf-8") as f:
         f.write("; 由 prepare_chunks.py 自动生成 - 请勿手改\n")

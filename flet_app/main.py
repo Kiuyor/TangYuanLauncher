@@ -5,11 +5,13 @@
 实施计划见: plan.md
 """
 import asyncio
+import json
 import os
 import subprocess
 import sys
 import threading
 import time
+import urllib.request
 from datetime import datetime
 
 import flet as ft
@@ -25,22 +27,45 @@ from app.fields import (
 from app.ini_model import RevIni, default_ini_text
 from app.locator import find_cfg_dir, find_csgo_dir, locate_rev_ini
 from app.settings import set_user_csgo_dir
+from flet_app.components import ui
+from flet_app.theme import (
+    COL_BG_CARD as COL_CARD,  # 卡片底 (bg-card #161922)
+)
 
-# ==================== 汤圆启动器主题色板 ====================
-COL_BG = "#111216"            # 窗口背景(纯色)
-COL_CARD = "#16181B"          # 主页卡片底
-COL_CARD_BORDER = "#87CEEB"   # 卡片描边(天蓝 SkyBlue, 2026-08 用户指定)
-COL_BRAND = "#87CEEB"         # 品牌天蓝 (2026-08 由克莱因蓝 #002FA7 更换)
-COL_BRAND_DARK = "#4FA3D4"    # 渐变深端
-COL_BRAND_LIGHT = "#B3E0F5"   # 胶囊底(更浅天蓝)
-ON_BRAND = "#0A2E52"          # 天蓝底上的文字/图标 (深蓝, 对比 7.9:1; 白字仅 1.7:1 不可用)
-ON_BRAND_OK = "#0B4F2E"       # 天蓝底上的成功态 (深绿, 已启动 ✓)
-COL_GLOW = "#DCE8FF"          # 冷白辉光 (2026-08 由淡金 #E8D5A3 换, 用户嫌土豪金; 拷问 Q1/Q3 定稿)
-COL_TEXT = "#EDEAF0"          # 主文字
-COL_TEXT_DIM = "#A6A0B0"      # 次要文字(原 #9A93A3 对比度偏低)
-CHIP_ADDED_BG = "#87CEEB"     # 推荐参数 chip 已添加态: 天蓝底 (2026-08 由淡金换, 拷问 Q2 定稿)
-INPUT_BORDER = "#4A4550"      # 输入控件边框 (提亮于 #3A3740: 空值输入区可识别性差, 视觉审计 2026-08)
-INPUT_FILL = "#101114"        # 输入控件深色填充块 (与卡片底区分, 明确可编辑区域)
+# ==================== 汤圆启动器主题色板 (矢车菊蓝纯色体系, docs/theme.py 令牌) ====================
+# 2026-08-08 推翻天蓝 #87CEEB 主题: 矢车菊蓝 #6495ED 纯色, 无渐变/发光。
+# 令牌定义在 flet_app/theme.py (rules.md §2: 禁止硬编码色值, 统一引用令牌)
+from flet_app.theme import (
+    COL_BG_DEEP as COL_BG,  # 窗口背景 (bg-deep #0c0e14)
+)
+from flet_app.theme import (
+    COL_BG_GHOST_2,
+    COL_BG_INPUT,  # 输入控件底
+    COL_BG_MAIN,  # 内容区 (bg-main #0f1117)
+    COL_BORDER_BRAND,
+    COL_BORDER_SUBTLE,
+    COL_BORDER_VISIBLE,
+    COL_BRAND,  # 品牌主色 #6495ED
+    COL_BRAND_LIGHT,  # 浅 #9DB9F3
+    COL_BRAND_SOFT,  # 柔 #8FB1F0
+    COL_ERR,
+    COL_OK,  # 成功/在线 #10b981
+    COL_SWITCH_INACTIVE_THUMB,
+    COL_SWITCH_INACTIVE_TRACK,
+    COL_TEXT_DIM,  # 辅助文字 #a0aec0
+    COL_TEXT_PRIMARY,  # 主文字原名 (ON_BRAND 引用)
+    COL_TEXT_SECONDARY,  # 次文字 #e2e8f0
+    COL_WARN,
+    FONT_36,
+    FONT_CN,
+    FONT_MONO,
+    SHADOW_CARD,
+)
+
+ON_BRAND = COL_TEXT_PRIMARY        # 主色底上的文字/图标: 白字 (对比 3.5:1, 大字号可读; 2026-08 新主题)
+CHIP_ADDED_BG = COL_BRAND_LIGHT     # chip 已添加态底 (浅主色)
+INPUT_BORDER = COL_BORDER_VISIBLE   # 输入控件边框
+INPUT_FILL = COL_BG_INPUT           # 输入控件深色填充
 
 
 def find_avatar_path(csgo_dir):
@@ -56,13 +81,13 @@ def find_avatar_path(csgo_dir):
 
 # 主页卡片尺寸
 CARD_W = 360
-AVATAR_D = 96
+AVATAR_D = 100   # 头像直径 (design-system.md #5, 100px)
 BTN_W = 288   # 卡片宽 80%
 BTN_H = 52
 
-# 窗口尺寸随布局切换: 主页 360×510 竖卡(窗口即卡) / 编辑 980×720 横屏, 向心步进缓动
+# 窗口尺寸随布局切换: 主页 360×510 竖卡(窗口即卡) / 编辑 784×600 横屏, 向心步进缓动
 WIN_HOME = (360, 510)
-WIN_EDIT = (980, 720)
+WIN_EDIT = (784, 600)
 WIN_MIN = (360, 510)
 
 
@@ -252,7 +277,7 @@ def _screen_center():
 def main(page: ft.Page):
     page.title = "Rev.Ini 编辑器 · CS:GO 配置工具"
     page.theme_mode = ft.ThemeMode.DARK
-    page.theme = ft.Theme(color_scheme_seed=COL_BRAND, font_family="Microsoft YaHei")
+    page.theme = ft.Theme(color_scheme_seed=COL_BRAND, font_family=FONT_CN)
     page.padding = 0
     page.bgcolor = ft.Colors.TRANSPARENT
     page.window.bgcolor = ft.Colors.TRANSPARENT
@@ -274,7 +299,13 @@ def main(page: ft.Page):
             break
 
     # -- 状态 --
-    auto_dir = find_csgo_dir() or ""
+    # 播种 csgo_dir: 自动定位优先, 未命中回退用户持久化目录 (deep-review 7轮 工具链 F4:
+    # 原只由 find_csgo_dir() 播种, get_user_csgo_dir() 仅被 locate_rev_ini() 消费 —
+    # 持久化目录的 rev.ini 缺失/损坏时工具页/启动报"未定位", 尽管该目录有 startgame.bat)
+    auto_dir = find_csgo_dir()
+    if not auto_dir:
+        from app.settings import get_user_csgo_dir
+        auto_dir = get_user_csgo_dir() or ""
     st = {"ini_path": "", "csgo_dir": auto_dir,
           "dir_source": "自动定位" if auto_dir else "未定位",
           "loaded_name": "NO FILE LOADED", "dirty": False}
@@ -294,17 +325,16 @@ def main(page: ft.Page):
             ft.Segment(value="utf-8", label="UTF-8"),
         ],
         selected=["gbk"],
-        style=ft.ButtonStyle(bgcolor=COL_BRAND, color=ON_BRAND),   # 选中分段天蓝深蓝字 (2026-08)
+        style=ft.ButtonStyle(bgcolor=COL_BRAND, color=ft.Colors.WHITE),   # 选中分段主色白字
         on_change=lambda e: _on_enc_change(e),
     )
-    save_btn = ft.FilledTonalButton("保存", icon=ft.Icons.SAVE,
-        style=ft.ButtonStyle(bgcolor=COL_BRAND, color=ON_BRAND))   # 天蓝实心深蓝字 (2026-08)
-    content_area = ft.Container(expand=True)
+    save_btn = None   # 实际定义在标题栏构建处 (editor_head, 2026-08 新设计: 保存移顶栏)
+    content_area = ft.Container(expand=True, bgcolor=COL_BG_MAIN)
 
     # -- 工具函数 --
     def set_status(text, ok=False, err=False):
         status_msg.value = text
-        status_msg.color = ft.Colors.GREEN if ok else (ft.Colors.RED if err else None)
+        status_msg.color = COL_OK if ok else (COL_ERR if err else None)
         status_msg.opacity = 1.0 if (ok or err) else 0.7
         page.update()
 
@@ -417,7 +447,15 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             def _apply():
                 st["csgo_dir"] = p
                 st["dir_source"] = "用户指定"
-                set_user_csgo_dir(p)
+                ok = set_user_csgo_dir(p)
+                if not ok:
+                    # 持久化失败: 会话内仍生效, 但重启后遗忘 (deep-review 7轮 工具链 F3)
+                    set_status("DIR SET // 目录已使用,但保存到本机失败(重启后需重新指定)", err=True)
+                    refresh_dir()
+                    ini = os.path.join(p, "rev.ini")
+                    if os.path.isfile(ini):
+                        load_file(ini)
+                    return
                 refresh_dir()
                 ini = os.path.join(p, "rev.ini")
                 if os.path.isfile(ini):
@@ -504,7 +542,10 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                         ctrl.error_text = "原值 " + repr(vr["v"]) + " 不在选项中, 保存将保留原文"
             elif ftype == "textarea":
                 vr["v"] = str(raw)
-                if isinstance(ctrl, ft.Column):
+                # v2 UI: ctrl 是 ft.Row([ta, gap, rec_panel]) 3:2 分栏 (deep-review 5轮 HIGH-1:
+                # 旧版是 ft.Column, v2 改 Row 后 isinstance(ft.Column) 恒 False, ta.value 永不回填,
+                # 用户看到的启动命令是默认值, 编辑/点 chips 后保存会覆盖文件真实 ProcName)
+                if isinstance(ctrl, ft.Row) and ctrl.controls:
                     ctrl.controls[0].value = vr["v"]
                 sync = vr.get("sync")
                 if sync:
@@ -668,7 +709,8 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             return
         set_status(f"CFG DIR // {cfg}", ok=True)
 
-    save_btn.on_click = on_save
+    # save_btn 实际定义在 editor_head (2026-08 新设计: 保存移顶栏), on_click 在
+    # 定义处接线 (on_save 已在此前定义, 见 editor_head 构建)
 
     # -- 字段行构建 --
     def build_field_row(field):
@@ -681,17 +723,18 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             val = bool(default)
             vr["v"] = val
             ctrl = ft.Switch(value=val,
-                active_color=ON_BRAND, active_track_color=COL_BRAND,   # 开启: 天蓝轨道+深蓝滑块 (2026-08)
-                inactive_thumb_color="#8A8494", inactive_track_color="#2A2730",
+                active_color=ft.Colors.WHITE, active_track_color=COL_BRAND,   # 开启: 主色轨道+白滑块
+                inactive_thumb_color=COL_SWITCH_INACTIVE_THUMB,
+                inactive_track_color=COL_SWITCH_INACTIVE_TRACK,
                 on_change=lambda e: (vr.__setitem__("v", e.control.value), mark_dirty()))
         elif ftype == "rank":
             # 伪装段位: 选项为 RANK_DISPLAY 段位名, 存储值 = 1-18 数字(保存时转换)
             opts = [ft.dropdown.Option(key=name, text=name) for name in RANK_DISPLAY]
             dflt_name = rank_level_to_name(default) if isinstance(default, int) else str(default)
             # 合法选择必须清除 bad, 否则非法原值字段永久无法通过 UI 修改 (deep-review R2)
-            ctrl = ft.Dropdown(options=opts, width=236, value=dflt_name,
-                filled=True,   # 0.86.5: Dropdown 必须 filled=True 才绘制 fill_color (视觉审计 2026-08)
-                border_color=INPUT_BORDER, focused_border_color=COL_BRAND, fill_color=INPUT_FILL,
+            ctrl = ui.select_dark(
+                opts, selected=dflt_name, width=236, height=64,
+                filled=True, fill_color=INPUT_FILL, border_color=INPUT_BORDER,
                 on_select=lambda e: (vr.__setitem__("v", e.control.value),
                                      vr.__setitem__("bad", False),
                                      setattr(e.control, "error_text", None), mark_dirty()))
@@ -699,10 +742,10 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             items = field.get("items", [])
             dm = field.get("display_map") or {}   # M4: 未提供 display_map 时不能 .get() None
             opts = [ft.dropdown.Option(key=i, text=dm.get(i, i)) for i in items]
-            ctrl = ft.Dropdown(options=opts, width=236,
-                filled=True,   # 0.86.5: 同上, 否则透明底融进卡片
-                value=str(default) if default else (items[0] if items else ""),
-                border_color=INPUT_BORDER, focused_border_color=COL_BRAND, fill_color=INPUT_FILL,
+            ctrl = ui.select_dark(
+                opts, selected=str(default) if default else (items[0] if items else ""),
+                width=236, height=64, filled=True, fill_color=INPUT_FILL,
+                border_color=INPUT_BORDER,
                 on_select=lambda e: (vr.__setitem__("v", e.control.value),
                                      setattr(e.control, "error_text", None), mark_dirty()))
         elif ftype == "int":
@@ -730,18 +773,18 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 mark_dirty()
                 e.control.update()
             vr["bad"] = False
-            ctrl = ft.TextField(width=236, text_align=ft.TextAlign.RIGHT,
+            ctrl = ui.input_dark(
                 value=str(default) if default else "0",
-                border_color=INPUT_BORDER, focused_border_color=COL_BRAND, fill_color=INPUT_FILL,
+                width=236, height=None,   # 保持 flet 默认高度 ~63px (用户否决过 40px 扁框)
                 on_change=_on_int_change)
         elif ftype == "textarea":
-            ta = ft.TextField(multiline=True, min_lines=3, max_lines=6,
+            ta = ui.input_dark(
                 value=str(default) if default else "",
-                hint_text=field.get("placeholder") or None,   # 占位符接线 (视觉审计 2026-08: 原未传入)
-                border_color=INPUT_BORDER, focused_border_color=COL_BRAND, fill_color=INPUT_FILL,
+                placeholder=field.get("placeholder") or None,   # 占位符接线 (视觉审计 2026-08: 原未传入)
+                multiline=True, mono=True, font_size=16,
+                min_lines=3, max_lines=6,   # 原内联实现的行数 (3-6), 迁移组件不改变视觉
                 on_change=lambda e: (vr.__setitem__("v", e.control.value), mark_dirty(), _sync_chips()))
-            # 推荐参数 chips: 点击 toggle 添加/移除; 已添加的 chip 变淡金底+对勾
-            # (避免重复添加, 视觉审计 2026-08)
+            # 推荐参数 chips (design-system.md #18): 点击 toggle 添加/移除
             chip_refs = []
             def _args_in_cur(args, cur):
                 """chip 参数是否已存在: 按空白分词后集合比较(子串匹配会误判 -high vs -highp)"""
@@ -754,11 +797,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             def _sync_chips():
                 cur = ta.value or ""
                 for cdef, chip in chip_refs:
-                    added = _args_in_cur(cdef.get("args", "").strip(), cur)
-                    chip.bgcolor = CHIP_ADDED_BG if added else None
-                    chip.label = ft.Text(("✓ " if added else "") + cdef["label"],
-                                         size=12, color=ON_BRAND if added else None)
-                    chip.icon = ft.Icons.CHECK if added else None
+                    chip.set_added(_args_in_cur(cdef.get("args", "").strip(), cur))
                 page.update()
             vr["sync"] = _sync_chips   # populate_all 加载后同步一次 chip 状态
             def make_cc(c):
@@ -778,81 +817,83 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 return on_chip
             chips = []
             for c in field.get("chips", []):
-                chip = ft.Chip(label=ft.Text(c["label"], size=12), on_click=make_cc(c))
+                chip = ui.Chip(c["label"], added=_args_in_cur(c.get("args", "").strip(),
+                                                              str(default).strip()),
+                               on_toggle=lambda label, added, cc=c: make_cc(cc)())
                 chip_refs.append((c, chip))
                 chips.append(chip)
-            ctrl = ft.Column([ta, ft.Row(chips, wrap=True, spacing=4)], spacing=8)
+            # 左右分栏 3:2 (design-system.md #20 LaunchSplit): 左=textarea 手动输入,
+            # 右=RecPanel 推荐启动项(竖排 chips 单行省略)。expand 比例分配宽度:
+            # ta expand=3 (左), 间隔 14px, rec_panel expand=2 (右)。
+            # 组件库实现 (deep-review 7轮 F4: 原内联堆砌, 抽 rec_panel/launch_split)
+            ctrl = ui.launch_split(ta, ui.rec_panel(chips))
         else:
             # max_length 应用字段定义的限制 (deep-review F10: 原实现忽略 maxlen,
             # 超长昵称可保存并在主页撑爆固定 360×510 布局)
-            ctrl = ft.TextField(width=236,
+            ctrl = ui.input_dark(
                 value=str(default) if default else "",
+                width=236, height=None,   # 保持 flet 默认高度 ~63px (用户否决过 40px 扁框)
                 max_length=field.get("maxlen") or None,
-                hint_text=field.get("placeholder") or None,   # 占位符接线 (视觉审计 2026-08)
-                border_color=INPUT_BORDER, focused_border_color=COL_BRAND, fill_color=INPUT_FILL,
+                placeholder=field.get("placeholder") or None,   # 占位符接线 (视觉审计 2026-08)
                 on_change=lambda e: (vr.__setitem__("v", e.control.value), mark_dirty()))
 
         if ftype == "textarea":
-            # 多行字段卡片: 纵向布局 — 标题/说明在上, 输入框通栏, chips 在下
-            # (视觉审计 2026-08: 原左右分栏把多行输入框压窄, 长参数频繁换行)
-            # 宽度=卡片内宽 (编辑窗口固定 980, 导航88+分隔1+ListView padding 40+卡片 padding 36)
-            # 勿用 fit_parent_size: ListView 无界高度下 TextField 通栏渲染空白 (实测 2026-08)
-            ta.width = 815
+            # 多行字段卡片 (design-system.md #20 LaunchSplit): 加载器启动命令卡,
+            # 通栏不参与双列网格; 内部 ctrl 已是 左textarea:右RecPanel 3:2 分栏
             row = ft.Container(
                 content=ft.Column([
-                    ft.Text(code_text, size=13, color=ft.Colors.ON_SURFACE_VARIANT, opacity=0.75),
-                    ft.Text(label, size=17, weight=ft.FontWeight.W_500),
-                    ft.Text(desc, size=14, color=ft.Colors.ON_SURFACE_VARIANT, opacity=0.85) if desc else ft.Text(""),
+                    ft.Text(code_text, size=11, color=COL_BRAND_LIGHT, opacity=0.8,
+                            font_family=FONT_MONO),
+                    ft.Text(label, size=14, weight=ft.FontWeight.W_700),
+                    ft.Text(desc, size=12, color=COL_TEXT_DIM, opacity=0.85) if desc else ft.Text(""),
                     ft.Container(height=6),
                     ctrl,
                 ], tight=True, spacing=2),
-                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, border_radius=12,
-                padding=ft.padding.Padding(left=18, top=16, right=18, bottom=16),
+                bgcolor=COL_CARD, border_radius=8,
+                border=ft.Border(top=ft.BorderSide(1, COL_BORDER_SUBTLE),
+                                 right=ft.BorderSide(1, COL_BORDER_SUBTLE),
+                                 bottom=ft.BorderSide(1, COL_BORDER_SUBTLE),
+                                 left=ft.BorderSide(1, COL_BORDER_SUBTLE)),
+                padding=ft.padding.Padding(left=16, top=16, right=16, bottom=16),
                 margin=ft.margin.Margin(top=4, bottom=4, left=0, right=0))
+            # hover 微交互 (LaunchSplit 内联卡无组件自带 hover, 手动加):
+            # 卡片提亮一档 + 品牌边框 (design-system.md #14 同款)
+            row.on_hover = lambda e, r=row: (
+                setattr(r, "bgcolor", COL_BG_GHOST_2 if e.data == "true" else COL_CARD),
+                setattr(r, "border", ft.Border(
+                    top=ft.BorderSide(1, COL_BORDER_BRAND if e.data == "true" else COL_BORDER_SUBTLE),
+                    right=ft.BorderSide(1, COL_BORDER_BRAND if e.data == "true" else COL_BORDER_SUBTLE),
+                    bottom=ft.BorderSide(1, COL_BORDER_BRAND if e.data == "true" else COL_BORDER_SUBTLE),
+                    left=ft.BorderSide(1, COL_BORDER_BRAND if e.data == "true" else COL_BORDER_SUBTLE))),
+                r.update())
         else:
-            row = ft.Container(
-                content=ft.Row([
-                    ft.Column([
-                        ft.Text(code_text, size=13, color=ft.Colors.ON_SURFACE_VARIANT, opacity=0.75),
-                        ft.Text(label, size=17, weight=ft.FontWeight.W_500),
-                        ft.Text(desc, size=14, color=ft.Colors.ON_SURFACE_VARIANT, opacity=0.85) if desc else ft.Text(""),
-                    ], tight=True, spacing=2, expand=True),
-                    ft.Container(content=ctrl, alignment=ft.alignment.Alignment(1, 0)),
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, border_radius=12,
-                padding=ft.padding.Padding(left=18, top=16, right=18, bottom=16),
-                margin=ft.margin.Margin(top=4, bottom=4, left=0, right=0))
-        # hover 微交互: 卡片提亮一档, 提升长列表可扫描性 (视觉增强 R4)
-        row.on_hover = lambda e, r=row: (
-            setattr(r, "bgcolor",
-                    ft.Colors.SURFACE_CONTAINER_HIGH if e.data == "true"
-                    else ft.Colors.SURFACE_CONTAINER_HIGHEST), r.update())
+            # 单字段卡片 (design-system.md #14 ConfigCard): 纵向 — 标题行+键名在上, 控件在下
+            # desc 固定 2 行高 (HTML field-grid 对齐: 双列卡 desc 行数不同会撑高卡片,
+            # 用户反馈 2026-08 界面语言/自动进入服务器大小不一致)
+            # 组件库实现 (rules.md §1, deep-review 5轮 MEDIUM-5): ui.config_card 支持
+            # title_expand(标题撑满+键名徽章贴右) 与 desc_lines(固定行高容器, 双列等高);
+            # hover 由组件自带 (deep-review 6轮: 不再手动覆盖, 消除双份实现)
+            row = ui.config_card(
+                title=label, desc=desc, tag=code_text,
+                control=ft.Container(content=ctrl, alignment=ft.alignment.Alignment(0, 0)),
+                title_expand=True, desc_lines=2,
+            )
+            row.margin = ft.margin.Margin(top=4, bottom=4, left=0, right=0)
         field_rows.append((field, vr, ctrl))
         return row
 
     def build_page(group):
-        items = []
         code_sec = group["fields"][0]["section"] if group.get("fields") else "GENERAL"
-        items.append(ft.Container(
-            content=ft.Column([
-                ft.Text(f"// CFG.{code_sec.upper()}", size=11, color=ft.Colors.AMBER_ACCENT, opacity=0.8),
-                ft.Text(group["title"], size=22, weight=ft.FontWeight.W_600),
-                ft.Text(group.get("desc", ""), size=13, color=ft.Colors.ON_SURFACE_VARIANT, opacity=0.7),
-            ], spacing=4),
-            padding=ft.padding.Padding(left=18, top=10, right=18, bottom=14)))
-        for f in group.get("fields", []):
-            items.append(build_field_row(f))
-        return ft.ListView(controls=items, padding=ft.padding.Padding(left=20, top=20, right=20, bottom=40), expand=True)
+        # 页头 (design-system.md #12 PageHead): 组件库实现, 不再内联堆砌 (deep-review 7轮 F4)
+        items = [ui.page_head(code_sec, group["title"], group.get("desc", ""))]
+        # 字段双列网格 (design-system.md #13 FieldGrid): 组件库实现。
+        # STRETCH 在 ListView 无界高度下塌陷 (两次实测 2026-08) → 用固定卡片高度:
+        # 内容已统一 (desc 固定 2 行 36px + 控件 height=40), 卡片高度恒定 = 等高
+        return ui.field_grid(group.get("fields", []), build_field_row, header=items[0])
 
     def build_tools_page(group):
         from app.tools import REPAIR_TOOLS, run_tool
-        items = [ft.Container(
-            content=ft.Column([
-                ft.Text("// CFG.TOOLS", size=11, color=ft.Colors.AMBER_ACCENT, opacity=0.8),
-                ft.Text(group["title"], size=22, weight=ft.FontWeight.W_600),
-                ft.Text(group.get("desc", ""), size=13, color=ft.Colors.ON_SURFACE_VARIANT, opacity=0.7),
-            ], spacing=4),
-            padding=ft.padding.Padding(left=18, top=10, right=18, bottom=14))]
+        items = [ui.page_head("TOOLS", group["title"], group.get("desc", ""))]
 
         # 执行超时设置 (2026-08): 脚本运行超过该秒数会被强制终止进程树
         # 默认 120s; 存字符串便于直接显示, 读取时解析+钳位
@@ -878,10 +919,11 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                     return
                 timeout = _parse_timeout()
                 def _run():
-                    run_btn.disabled = True
-                    run_btn.content = "运行中…"   # 0.86.5 Button 无 text 属性, 用 content (2026-08)
+                    # ui.RunButton 的 content 是 Row([Icon, Text]) — 用 set_busy 驱动
+                    # 禁用+图标+文案, 直接赋字符串会破坏结构丢图标 (deep-review 6轮回归)
+                    run_btn.set_busy(True)
                     status_txt.value = "运行中…"
-                    status_txt.color = ft.Colors.AMBER
+                    status_txt.color = COL_WARN
                     page.update()
 
                     def on_done(ok, output):
@@ -890,15 +932,14 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                             lambda: _apply_tool_result(ok, output))
 
                     def _apply_tool_result(ok, output):
-                        run_btn.disabled = False
-                        run_btn.content = "运行"
+                        run_btn.set_busy(False)
                         if ok:
                             status_txt.value = "完成"
-                            status_txt.color = ft.Colors.GREEN
+                            status_txt.color = COL_OK
                             set_status(f"TOOL DONE // {tool.name}", ok=True)
                         else:
                             status_txt.value = "失败"
-                            status_txt.color = ft.Colors.RED
+                            status_txt.color = COL_ERR
                             set_status(f"TOOL FAIL // {tool.name}: {output[:120]}", err=True)
                         page.update()
 
@@ -906,10 +947,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                         # 脚本缺失/无法启动 (启动瞬间文件被删/占用): on_done 不会被回调,
                         # 必须在这里恢复按钮状态, 否则永久卡"运行中…" (2026-08 用户反馈)
                         page.run_thread(lambda: (
-                            setattr(run_btn, "disabled", False),
-                            setattr(run_btn, "content", "运行"),
+                            run_btn.set_busy(False),
                             setattr(status_txt, "value", "无法启动"),
-                            setattr(status_txt, "color", ft.Colors.RED),
+                            setattr(status_txt, "color", COL_ERR),
                             set_status(f"TOOL START FAIL // {tool.file or tool.name}", err=True),
                             page.update()))
                 if st["dirty"]:
@@ -927,39 +967,39 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 ft.Text("超过该秒数未结束将被强制终止, 防止脚本卡死/注册表修改悬空",
                         size=12, color=COL_TEXT_DIM, expand=True),
             ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, border_radius=12,
+            bgcolor=COL_CARD, border_radius=8,
+            border=ft.Border(top=ft.BorderSide(1, COL_BORDER_SUBTLE),
+                             right=ft.BorderSide(1, COL_BORDER_SUBTLE),
+                             bottom=ft.BorderSide(1, COL_BORDER_SUBTLE),
+                             left=ft.BorderSide(1, COL_BORDER_SUBTLE)),
             padding=ft.padding.Padding(left=16, top=12, right=16, bottom=12),
             margin=ft.margin.Margin(left=0, top=4, right=0, bottom=4)))
 
+        # 工具卡片 2×2 网格 (design-system.md #21 ToolCard, HTML tool-grid):
+        # 顶行(类别标签+风险标签 | 运行按钮) → 工具名 → 状态文本
+        # 描述与「执行: xxx」已删 (用户不需要知道内部命令)
+        # 组件库实现 (rules.md §1: 禁止页面内联伪组件, deep-review 5轮 MEDIUM-5):
+        # ui.tool_card 内部用 cat_tag/risk_tag/RunButton/tool_status,
+        # card._run_btn / card._status 供 make_runner 驱动状态
+        tool_cards = []
         for tool in REPAIR_TOOLS:
-            run_btn = ft.Button("运行", icon=ft.Icons.PLAY_ARROW,
-                style=ft.ButtonStyle(bgcolor=COL_BRAND, color=ON_BRAND))   # 品牌色实心 (视觉审计 2026-08)
-            status_txt = ft.Text("待运行", size=11, opacity=0.85)
+            card = ui.tool_card(tool.category, tool.risk, tool.name, expand=True)
+            run_btn = card._run_btn  # type: ignore[attr-defined]
+            status_txt = card._status  # type: ignore[attr-defined]
             run_btn.on_click = make_runner(tool, run_btn, status_txt)
-            # 风险分级色: 低=绿/中=琥珀/高=红 (原统一 ERROR 红无法区分等级, 视觉审计 2026-08)
-            RISK_COLORS = {"低": ft.Colors.GREEN, "中": ft.Colors.AMBER, "高": ft.Colors.RED}
-            risk_color = RISK_COLORS.get(tool.risk, ft.Colors.ERROR)
-            items.append(ft.Container(
-                content=ft.Row([
-                    ft.Column([
-                        ft.Row([
-                            # 类别标签: 天蓝底深蓝字 (白字仅 1.7:1 不可读, 2026-08)
-                            ft.Container(content=ft.Text(tool.category, size=11, color=ON_BRAND),
-                                bgcolor=COL_BRAND,
-                                padding=ft.padding.Padding(left=8, top=2, right=8, bottom=2), border_radius=4),
-                            ft.Text(f"风险:{tool.risk}", size=12, color=risk_color, weight=ft.FontWeight.W_500),
-                        ], spacing=8),
-                        ft.Text(tool.name, size=16, weight=ft.FontWeight.W_600),
-                        ft.Text(tool.desc, size=13, opacity=0.85),
-                        ft.Text(f"执行: {tool.action}", size=12, opacity=0.7),
-                    ], expand=True, spacing=4),
-                    ft.Column([
-                        run_btn,
-                        status_txt,
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
-                ]), bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST, border_radius=12,
-                padding=ft.padding.Padding(left=16, top=16, right=16, bottom=16),
-                margin=ft.margin.Margin(left=0, top=4, right=0, bottom=4)))
+            tool_cards.append(card)
+
+        # 2 列一行: 每对卡并排 (HTML tool-grid 2×2; STRETCH 会塌陷, 同字段页)
+        for i in range(0, len(tool_cards), 2):
+            pair = tool_cards[i:i + 2]
+            if len(pair) == 1:
+                items.append(pair[0])
+            else:
+                items.append(ft.Row([
+                    pair[0],
+                    ft.Container(width=10),
+                    pair[1],
+                ], vertical_alignment=ft.CrossAxisAlignment.CENTER))
         items.append(ft.Container(
             content=ft.Text("工具直接调用 CS:GO 目录下的官方维护脚本,运行结果以脚本输出为准。\n"
                 "修复 Steam 错误会修改当前用户的注册表(HKCU),请按需使用。", size=12, opacity=0.85),
@@ -974,7 +1014,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         icon = icon_map.get(g.get("icon_key", "wrench"), ft.Icons.BUILD)
         nav_items.append(ft.NavigationRailDestination(
             icon=ft.Icon(icon, color=COL_TEXT_DIM),
-            selected_icon=ft.Icon(icon, color=ON_BRAND),
+            selected_icon=ft.Icon(icon, color=COL_BRAND_SOFT),
             label=ft.Text(g["title"], size=12)))
         nav_content.append(build_tools_page(g) if g.get("type") == "tools" else build_page(g))
     content_area.content = nav_content[0]
@@ -1029,26 +1069,15 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                                       fit=ft.BoxFit.COVER,
                                       border_radius=AVATAR_D // 2)
         else:
-            avatar.content = ft.Text((nick or "汤")[:1], size=40,
-                                     color=COL_GLOW, weight=ft.FontWeight.W_700)
+            avatar.content = ft.Text((nick or "汤")[:1], size=FONT_36,
+                                     color=COL_BRAND_LIGHT, weight=ft.FontWeight.W_700)
 
-    # 头像(底色与主界面一致 + 金色圆环 + 淡金光晕)
-    avatar = ft.Container(
-        width=AVATAR_D, height=AVATAR_D,
-        border_radius=AVATAR_D // 2,
-        bgcolor=COL_CARD,
-        border=ft.Border(top=ft.BorderSide(2, COL_GLOW),
-                         right=ft.BorderSide(2, COL_GLOW),
-                         bottom=ft.BorderSide(2, COL_GLOW),
-                         left=ft.BorderSide(2, COL_GLOW)),
-        alignment=ft.alignment.Alignment(0, 0),
-        content=ft.Text("汤", size=40, color=COL_GLOW, weight=ft.FontWeight.W_700),
-    )
-    # 主页昵称: 单行 + 省略号, 防超长昵称撑爆固定 360×510 布局 (deep-review F10)
-    nick_label = ft.Text("未定位", size=24, weight=ft.FontWeight.W_700, color=COL_TEXT,
-                         max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)
+    # 头像 (100px 正圆, 矢车菊蓝浅字, 无外发光; design-system.md #5)
+    avatar = ui.avatar("汤")
+    # 主页昵称: 组件库 Nickname (单行+省略号, 防超长昵称撑爆固定 360×510 布局 deep-review F10)
+    nick_label = ui.nickname("未定位", size=24)
     unlocated_hint = ft.Text("⚠ rev.ini 未定位, 点配置指定目录", size=12, color=COL_TEXT_DIM)
-    home_err = ft.Text("", size=12, color=ft.Colors.ERROR)
+    home_err = ft.Text("", size=12, color=COL_ERR)
     # 提示行动态容器: visible=False 的 Text 实测仍占布局空间(Flet 0.86.5),
     # 隐藏时会把主页中部撑出 ~74px 空白; 改用 controls 增删, 空则完全不占位
     hint_box = ft.Column([], spacing=0, tight=True)
@@ -1074,15 +1103,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 # 切回主页同步启动按钮状态: 游戏运行中保持"已启动 ✓" (R6)
                 if not st.get("launching"):
                     if csgo_running():
-                        launch_btn_text.value = "已启动 ✓"
-                        launch_btn_text.color = ON_BRAND_OK
-                        launch_icon.color = ON_BRAND_OK
-                        launch_btn.gradient = GRAD_LAUNCH
+                        launch_btn.set_state("running", "游戏运行中")
                     else:
-                        launch_btn_text.value = "启动游戏"
-                        launch_btn_text.color = ON_BRAND
-                        launch_icon.color = ON_BRAND
-                        launch_btn.gradient = GRAD_LAUNCH
+                        launch_btn.set_state("idle")
                 error_epoch["n"] += 1   # 使过期的 show_home_error Timer 失效 (R6)
                 page.update()
                 return
@@ -1093,10 +1116,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         _apply_avatar("汤")
         # 未定位时按钮复位 (R6)
         if not st.get("launching"):
-            launch_btn_text.value = "启动游戏"
-            launch_btn_text.color = ON_BRAND
-            launch_icon.color = ON_BRAND
-            launch_btn.gradient = GRAD_LAUNCH
+            launch_btn.set_state("idle")
         error_epoch["n"] += 1   # 使过期的 show_home_error Timer 失效 (R6)
         page.update()
 
@@ -1163,8 +1183,6 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         except Exception:  # noqa: BLE001 - tasklist 调用兜底, 失败视为不存在
             return False
 
-    launch_icon = ft.Icon(ft.Icons.ROCKET_LAUNCH, size=18, color=ON_BRAND)
-    launch_btn_text = ft.Text("启动游戏", size=16, weight=ft.FontWeight.W_600, color=ON_BRAND)
 
     def on_launch_click(_=None):
         """轻检查 + 启动 Loader + 轮询 csgo.exe 反馈
@@ -1176,10 +1194,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             return
         # 进程级幂等: 仅以 csgo.exe 判定游戏在运行 (Loader 生命周期不可靠, R4)
         if csgo_running():
-            launch_btn_text.value = "已启动 ✓"
-            launch_btn_text.color = ON_BRAND_OK
-            launch_icon.color = ON_BRAND_OK
-            launch_btn.gradient = GRAD_LAUNCH
+            launch_btn.set_state("running", "游戏运行中")
             page.update()
             return
         d = st["csgo_dir"] or find_csgo_dir() or ""
@@ -1241,9 +1256,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 return
 
         st["launching"] = True      # 防连点
-        launch_btn.gradient = GRAD_LAUNCHING   # 渐变变暗 = 忙碌态
-        launch_btn_text.value = "启动中…"
-        launch_btn_text.color = COL_TEXT
+        launch_btn.set_state("launching", "启动中…")
         page.update()
 
         def poll():
@@ -1258,62 +1271,57 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             page.run_thread(lambda: _apply_poll_result(ok))
 
         def _apply_poll_result(ok):
-            launch_btn.gradient = GRAD_LAUNCH
             if ok:
-                launch_btn_text.value = "已启动 ✓"
-                launch_btn_text.color = ON_BRAND_OK
-                launch_icon.color = ON_BRAND_OK
+                launch_btn.set_state("running", "游戏运行中")
             else:
-                launch_btn_text.value = "启动游戏"
-                launch_btn_text.color = ON_BRAND
-                launch_icon.color = ON_BRAND
+                launch_btn.set_state("idle")
                 # 超时反馈必须走主页可见通道 (status_bar 在主页隐藏, R3)
                 show_home_error("启动超时: 未检测到 csgo.exe, 游戏可能仍在启动, 请稍候")
             st["launching"] = False
             page.update()
         threading.Thread(target=poll, daemon=True).start()
 
-    # 辉光已删除 (2026-08 用户决定): 启动按钮/头像不再有呼吸光晕
-    hover_state = {"on": False}   # 启动按钮 hover 状态 (渐变提亮)
+    # 启动按钮: 110px 圆形纯图标 (矢车菊蓝纯色, 无渐变无发光; design-system.md #8)
+    launch_btn = ui.LaunchButton(on_click=on_launch_click, tooltip="启动游戏")
+    # 服务器状态胶囊 (主页, design-system.md #7): 拉取官网状态 API (真实数据, 禁止编造)。
+    # 数据源: https://cs.suchitems.top/api/status (未烬官网, 心跳脚本 heartbeat.py 60s 上报
+    # Upstash Redis, 官网 status.ts 聚合为 {online, lastBeat, players, maxPlayers})
+    SERVER_STATUS_API = "https://cs.suchitems.top/api/status"
+    server_monitor = ui.ServerMonitor(label="离线", count="", status="offline")
 
-    # 启动按钮渐变 (2026-08): 正常/启动中(变暗忙碌态) 两档
-    GRAD_LAUNCH = ft.LinearGradient(begin=ft.alignment.Alignment(0, -1),
-                                    end=ft.alignment.Alignment(0, 1),
-                                    colors=[COL_BRAND, COL_BRAND_DARK])
-    GRAD_LAUNCHING = ft.LinearGradient(begin=ft.alignment.Alignment(0, -1),
-                                       end=ft.alignment.Alignment(0, 1),
-                                       colors=[COL_BRAND_DARK, "#2A6B96"])   # 忙碌态变暗 (白字可读)
+    def _refresh_server():
+        """拉取状态 API → 在线=绿点+人数 / 离线=灰点「离线」/ 未知=灰点「未知」。
 
-    launch_btn = ft.Container(
-        width=BTN_W, height=BTN_H,
-        gradient=GRAD_LAUNCH,
-        border_radius=BTN_H // 2,
-        alignment=ft.alignment.Alignment(0, 0),
-        animate=ft.Animation(1300, ft.AnimationCurve.EASE_IN_OUT),
-        on_click=on_launch_click,
-        on_hover=lambda e: on_launch_hover(e),   # 晚绑定: 函数在其后定义
-        content=ft.Row([launch_icon, launch_btn_text], spacing=8,
-                       alignment=ft.MainAxisAlignment.CENTER),
-    )
+        线程安全: 工作线程调用, 控件变更经 page.run_thread 回主线程 (项目规则 H1)。
+        红线 (rules.md §4.2): online=true 才显示人数, 否则隐藏; 网络失败显示「离线」不编造。
+        """
+        def _do():
+            label, count, status = "离线", "", "offline"
+            try:
+                req = urllib.request.Request(SERVER_STATUS_API, headers={
+                    "User-Agent": "RevIni-Editor/1.0", "Cache-Control": "no-cache"})
+                with urllib.request.urlopen(req, timeout=6) as resp:
+                    d = json.loads(resp.read().decode("utf-8", "replace"))
+                now_s = time.time()
+                if d.get("online") is True:
+                    lb = d.get("lastBeat")
+                    fresh = lb is not None and now_s - float(lb) <= 180
+                    if fresh:
+                        status, label = "online", "在线"
+                        pl, mx = d.get("players"), d.get("maxPlayers")
+                        if pl is not None:
+                            count = f"{pl} / {mx if mx is not None else '?'} 人"
+                    else:
+                        status, label = "offline", "离线"
+                elif d.get("online") is False:
+                    status, label = "offline", "离线"
+                else:
+                    status, label = "offline", "未知"
+            except Exception:  # noqa: BLE001 - 网络/JSON/类型兜底(URLError/JSONDecodeError/TypeError 均归离线)
+                status, label = "offline", "离线"   # 网络失败: 不编造, 显示离线
+            page.run_thread(lambda: server_monitor.set_status(status, label, count))
 
-    def on_launch_hover(e):
-        """hover 微交互: 渐变整体提亮一档 (光晕已删除 2026-08)"""
-        hover_state["on"] = e.data == "true"
-        if st.get("launching"):
-            # 启动中忙碌态: 保持变暗, 不响应 hover 提亮
-            launch_btn.gradient = GRAD_LAUNCHING
-            launch_btn.update()
-            return
-        if hover_state["on"]:
-            launch_btn.gradient = ft.LinearGradient(
-                begin=ft.alignment.Alignment(0, -1), end=ft.alignment.Alignment(0, 1),
-                colors=["#B5E2F7", "#7CC4EC"])   # hover 整体提亮一档 (idle: #87CEEB→#4FA3D4)
-        else:
-            launch_btn.gradient = GRAD_LAUNCH
-        launch_btn.update()
-    config_btn = ft.OutlinedButton("配置", icon=ft.Icons.TUNE, width=BTN_W, height=44,
-                                   style=ft.ButtonStyle(side=ft.BorderSide(1, COL_BRAND)),
-                                   on_click=lambda e: enter_editor(e))
+        threading.Thread(target=_do, daemon=True).start()
 
     def gap(h):
         return ft.Container(height=h)
@@ -1322,21 +1330,19 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         width=CARD_W,
         bgcolor=COL_CARD,
         border_radius=24,
-        # 阴影改纯黑: 原天蓝 #87CEEB33 向上扩散到标题栏下方渲染成橄榄色线
-        # (用户报告\"标题栏下方一条线\", 2026-08); 黑色阴影融入深底无色相
-        shadow=ft.BoxShadow(blur_radius=30, spread_radius=0, color="#00000059",
-                            offset=ft.Offset(0, 8)),
+        # 阴影 (SHADOW_CARD, theme.py): 纯黑融入深底无色相
+        shadow=SHADOW_CARD,
         padding=ft.padding.Padding(top=28, left=36, right=36, bottom=30),
         content=ft.Column([
             avatar,
             gap(24),
             nick_label,
-            gap(8),
-            hint_box,
+            gap(14),
+            server_monitor,
             gap(20),
             launch_btn,
-            gap(14),
-            config_btn,
+            # 错误/引导提示 (仅出错时占位, 常驻就绪提示已删 — design-system.md)
+            hint_box,
         ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=0),
     )
 
@@ -1347,15 +1353,35 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
     )
 
     # -- 布局切换 (主页 ↔ 编辑页) --
+    # 服务器状态轮询: 每次回主页立即刷新一次, 之后每 30s 一次 (官网 StatusCard 同频)。
+    # epoch 防护: 过期 Timer 不覆盖新状态 (与 error_epoch 同模式, deep-review F7)
+    server_epoch = {"n": 0}
+
+    def _server_poll_loop():
+        while True:
+            time.sleep(30)
+            if _server_poll_epoch["n"] == 0:
+                continue   # 已停 (进编辑页后 epoch 置 0 停止轮询)
+            _refresh_server()
+
+    _server_poll_epoch = server_epoch
+
     def show_launcher():
         refresh_launcher()
         title_bar.content = launcher_head
         view_switcher.content = launcher_view
         status_bar.visible = False   # 主页 360×510 窗口即卡, 状态栏放不下且无功能价值
         page.window.focused = True   # 主动聚焦: frameless 窗口未聚焦时首次点击被窗口管理器吞掉 (2026-08)
+        # 启动/恢复服务器状态轮询: 立即刷一次 + 后台 30s 周期 (仅主页期间)
+        server_epoch["n"] += 1
+        _refresh_server()
+        if not getattr(_server_poll_loop, "_started", False):
+            _server_poll_loop._started = True
+            threading.Thread(target=_server_poll_loop, daemon=True).start()
         page.update()
 
     def show_editor():
+        server_epoch["n"] = 0   # 停服务器状态轮询 (编辑期间不刷主页 UI)
         if model is None and not load_state["loading"]:
             # 首次进入编辑页 lazy 加载 (仅当 enter_editor 的 _prep 未在加载时;
             # M2: 否则数据由 _prep 完成后的 run_thread 回调填充, 避免双加载/双 populate)
@@ -1400,26 +1426,32 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
     # -- 窗口切换 (方案 B 2026-08: 一次到位 + AnimatedSwitcher 内容过渡) --
     # 逐帧窗口 resize 每帧一次 Python→Flutter 往返, 无论怎么优化都有限;
     # 改为: 窗口一次 update 到位 + body 内容用 AnimatedSwitcher(SCALE) 原生过渡。
-    resize_state = {"busy": False}
+    resize_state = {"busy": False, "pending": None}
 
     def _animate_window(tw, th, on_done=None):
-        """窗口一次到位到目标尺寸(屏幕居中); on_done 同步执行(主线程)。
-        内部 run_thread: 工作线程(Timer/轮询)调用也可靠, 窗口字段仅主线程有效 (2026-08)。"""
+        """窗口一次到位到目标尺寸(保持当前中心); on_done 同步执行(主线程)。
+        内部 run_thread: 工作线程(Timer/轮询)调用也可靠, 窗口字段仅主线程有效 (2026-08)。
+        busy 时请求排队(pending), 完成后重放最后一次 — 快速连点不丢请求
+        (deep-review 7轮 F4: 原实现 busy 直接 return, 连点时的第二次切换静默丢失)。"""
         if resize_state["busy"]:
+            resize_state["pending"] = (tw, th, on_done)
             return
         resize_state["busy"] = True
         page.run_thread(lambda: _do_resize(tw, th, on_done))
 
     def _do_resize(tw, th, on_done):
         try:
-            sc = _screen_center()
-            if sc:
-                cx, cy = sc
+            w0 = page.window.width or WIN_HOME[0]
+            h0 = page.window.height or WIN_HOME[1]
+            l0 = page.window.left if page.window.left is not None else 0
+            t0 = page.window.top if page.window.top is not None else 0
+            # 多显示器 (deep-review 7轮 F1/F5): 保持当前窗口中心, 不跳回主屏 —
+            # 用户把窗口拖到副屏后进出编辑页, 位置不丢。仅当窗口仍在启动默认
+            # 角标 (10,10)/(0,0) 未摆放时才用主屏中心居中。
+            if (l0, t0) in ((0, 0), (10, 10)):
+                sc = _screen_center()
+                cx, cy = sc if sc else (l0 + w0 / 2, t0 + h0 / 2)
             else:
-                w0 = page.window.width or WIN_HOME[0]
-                h0 = page.window.height or WIN_HOME[1]
-                l0 = page.window.left if page.window.left is not None else 0
-                t0 = page.window.top if page.window.top is not None else 0
                 cx, cy = l0 + w0 / 2, t0 + h0 / 2
             page.window.min_width, page.window.min_height = WIN_MIN
             page.window.width = tw
@@ -1429,8 +1461,12 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             page.update()
         finally:
             resize_state["busy"] = False
+            pending = resize_state["pending"]
+            resize_state["pending"] = None
             if on_done:
                 on_done()
+            if pending:
+                _animate_window(*pending)
 
     def enter_editor(_=None):
         """配置按钮: 预构建编辑页内容(与窗口展开动画并行), 动画完成只做轻量切换。
@@ -1447,7 +1483,12 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         def _prep():
             """工作线程: 只做 locate + RevIni.load(纯数据), 不碰任何 UI 控件 (H1/M2)"""
             if model is not None:
-                return   # 已加载过: 防重复加载 (loading 标志是给 show_editor 看的)
+                # 已加载过: 防重复加载 (loading 标志是给 show_editor 看的)。
+                # 早退也要复位互斥 — 否则第二次进编辑页后 loading 卡 True,
+                # 第三次点「配置」被入口 if load_state["loading"]: return 永久拦截
+                # (deep-review 5轮 HIGH-2, 第四轮 LOW6 防连点的副作用)
+                load_state["loading"] = False
+                return
             auto = locate_rev_ini()
             if auto:
                 import warnings
@@ -1458,9 +1499,12 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 except OSError as e:
                     # 先取出消息再进 lambda: 避免闭包延迟绑定 except 变量 (F841)
                     err_msg = f"LOAD ERROR // {e}"
+                    # 失败路径与「未找到」路径收敛到同一兜底: 载入默认模板。
+                    # 只解互斥不建模板会让 model 留 None → 编辑页空表单,
+                    # 点保存 model.save() 抛未捕获 AttributeError (deep-review 7轮 F2)
                     page.run_thread(lambda: (
-                        set_status(err_msg, err=True),
-                        load_state.__setitem__("loading", False)))   # M2: 失败也要解除互斥
+                        _use_default_template(),
+                        set_status(f"{err_msg} · 已载入默认模板", err=True)))
                     return
                 enc_w = any(issubclass(w.category, RuntimeWarning) for w in caught)
                 page.run_thread(
@@ -1471,29 +1515,32 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         _animate_window(*WIN_EDIT, on_done=show_editor)
 
     # -- 标题栏 --
+    # 主页窗口控制: 配置齿轮(最左) + 最小化 + 关闭 (design-system.md #4: 配置入口在标题栏)
+    home_win_controls = ft.Row([
+        ui.win_btn(ft.Icons.SETTINGS, "配置", on_click=lambda e: enter_editor(e)),
+        ui.win_btn(ft.Icons.MINIMIZE, "最小化", on_click=on_minimize),
+        ui.win_btn(ft.Icons.CLOSE, "关闭", on_click=on_close_window, variant="close"),
+    ], spacing=6)
     win_controls = ft.Row([
-        ft.IconButton(icon=ft.Icons.MINIMIZE, on_click=on_minimize, tooltip="最小化",
-                      icon_color=COL_TEXT_DIM),
-        ft.IconButton(icon=ft.Icons.CLOSE, on_click=on_close_window, tooltip="关闭",
-                      icon_color=COL_TEXT_DIM),
+        ui.win_btn(ft.Icons.MINIMIZE, "最小化", on_click=on_minimize),
+        ui.win_btn(ft.Icons.CLOSE, "关闭", on_click=on_close_window, variant="close"),
     ], spacing=6)
 
-    # 主页: 版本胶囊 + 副标题(左) + 窗口控制(右)
+    # 主页: 版本徽章 + 产品名(左) + 窗口控制(右)
     launcher_head = ft.Row([
         ft.Row([
-            ft.Container(
-                content=ft.Text(f"v{VERSION}", size=10, weight=ft.FontWeight.W_500, color=ON_BRAND),
-                bgcolor=COL_BRAND_LIGHT,
-                border_radius=10,
-                padding=ft.padding.Padding(left=10, top=4, right=10, bottom=4),
-            ),
-            # 原卡片副标题移至版本号旁 (2026-08 用户指定); 字号 16 (用户指定 2026-08)
-            ft.Text("汤圆启动器", size=16, color="#C3BDD0"),
-        ], spacing=8),
-        win_controls,
+            ui.version_tag(f"v{VERSION}"),
+            # 产品名 (design-system.md #6 字号 18/700)
+            ft.Text("汤圆启动器", size=18, weight=ft.FontWeight.W_700, color=COL_TEXT_SECONDARY),
+        ], spacing=10),
+        home_win_controls,
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
-    # 编辑页: ← 返回 + 文件按钮(左) + 目录/文件信息 + 窗口控制(右)
+    # 编辑页: ← 返回 + 文件按钮(左) + 保存 + 窗口控制(右)
+    # 保存按钮移到顶栏左侧主按钮位 (design-system.md #10: BarButton primary 变体)
+    save_btn = ft.FilledButton("保存", icon=ft.Icons.SAVE, on_click=on_save,
+        style=ft.ButtonStyle(bgcolor=COL_BRAND, color=ft.Colors.WHITE,
+                             shape=ft.RoundedRectangleBorder(radius=8)))
     editor_head = ft.Row([
         ft.Row([
             ft.OutlinedButton("返回", icon=ft.Icons.ARROW_BACK, on_click=on_back_to_launcher,
@@ -1505,12 +1552,10 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                               style=ft.ButtonStyle(side=ft.BorderSide(1, COL_BRAND))),
             ft.OutlinedButton("打开文件", icon=ft.Icons.FILE_OPEN, on_click=on_open_file,
                               style=ft.ButtonStyle(side=ft.BorderSide(1, COL_BRAND))),
+            ft.Container(width=1, height=26, bgcolor=ft.Colors.OUTLINE_VARIANT),
+            save_btn,
         ], spacing=10),
-        ft.Row([
-            ft.Column([ft.Text("CS:GO 目录", size=11, opacity=0.8), dir_label], tight=True, spacing=1),
-            path_chip,
-            win_controls,
-        ], spacing=10),
+        win_controls,
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
     title_bar = ft.Container(
@@ -1528,8 +1573,10 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         min_width=88, min_extended_width=88,
         destinations=nav_items, on_change=on_nav_change,
         bgcolor=COL_BG, group_alignment=-1.0,   # 显式最顶: 消除剩余顶部 padding (2026-08)
-        indicator_color="#4FA3D4",   # 选中胶囊(天蓝中档, 深底上醒目)
-        selected_label_text_style=ft.TextStyle(color=COL_TEXT, size=12, weight=ft.FontWeight.W_600),
+        # 选中态 = 图标/文字变品牌柔色 (design-system.md #11, HTML 无背景胶囊);
+        # indicator 必须透明 — 实心胶囊会盖住图标 SVG (用户反馈 2026-08)
+        indicator_color=ft.Colors.TRANSPARENT,
+        selected_label_text_style=ft.TextStyle(color=COL_BRAND_SOFT, size=12, weight=ft.FontWeight.W_600),
         unselected_label_text_style=ft.TextStyle(color=COL_TEXT_DIM, size=12))
 
     # -- 编辑页视图 (导航栏 + 字段区) --
@@ -1539,14 +1586,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         content_area,
     ], expand=True)
 
-    # -- 状态栏 (无时钟) --
-    status_bar = ft.Container(
-        content=ft.Row([
-            status_msg,
-            ft.Row([ft.Text("编码", size=12, opacity=0.75), enc_selector, save_btn], spacing=8),
-        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-        bgcolor=ft.Colors.SURFACE_CONTAINER,
-        padding=ft.padding.Padding(left=16, top=8, right=16, bottom=8))
+    # -- 状态栏 (仅图标 + 编码切换; 常驻文字/时间戳已删 — design-system.md #26)
+    # 组件库实现 (rules.md §1: 禁止页面内联伪组件, deep-review 5轮 MEDIUM-5)
+    status_bar = ui.status_bar(enc_selector, status_msg)
 
     # -- 视图容器 (AnimatedSwitcher 内容过渡, 方案 B) --
     # 2026-08 重大修复: transition=SCALE + scale=0.9 时内容以 0.9 缩放切入
@@ -1605,6 +1647,13 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         def _do():
             try:
                 page.window.visible = True
+                # 用户已拖动窗口(位置不再是启动默认角标): 跳过重定位,
+                # 不撤销用户摆放 (deep-review 7轮 F5; 原实现无条件回主屏中心)
+                l0 = page.window.left if page.window.left is not None else 0
+                t0 = page.window.top if page.window.top is not None else 0
+                if (l0, t0) not in ((0, 0), (10, 10)):
+                    page.update()
+                    return
                 s2 = _screen_center()
                 if s2:
                     # 用当前窗口尺寸计算中心: 启动 2s 内用户可能已进编辑页(980×720),
