@@ -1,7 +1,7 @@
 @echo off
-rem Nuitka directory build - TangYuan Launcher v2.2.0
+rem Nuitka directory build - TangYuan Launcher v2.2.1
 rem Usage: double-click or run from cmd
-rem Output: build\nuitka\main.dist\  (copy engine + zip by make_dist.py)
+rem Output: build\nuitka\main.dist\  (引擎拷贝见下方 xcopy; 游戏分块压缩见 prepare_chunks.py)
 setlocal
 cd /d "%~dp0\.."
 set "PYTHONPATH="
@@ -15,8 +15,8 @@ set "FLET_ENGINE=%USERPROFILE%\.flet\client\flet-desktop-full-0.86.5\flet"
   --windows-product-name="TangYuanLauncher" ^
   --windows-company-name="RevIniEditor" ^
   --windows-file-description="CS:GO rev.ini config tool" ^
-  --windows-file-version=2.2.0.0 ^
-  --windows-product-version=2.2.0.0 ^
+  --windows-file-version=2.2.1.0 ^
+  --windows-product-version=2.2.1.0 ^
   --include-package=flet ^
   --include-package=flet_desktop ^
   --include-package-data=flet ^
@@ -60,6 +60,6 @@ if not exist "build\nuitka\main.dist\assets\Loader_opt23.exe" (
   exit /b 1
 )
 echo [OK] build done: build\nuitka\main.dist\RevIniEditor.exe + engine + icon.ico + assets
-echo [OK] next: "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\installer.iss
+echo [OK] next: "C:\Users\75017\AppData\Local\Programs\Inno Setup 6\ISCC.exe" packaging\installer.iss
 pause
 endlocal

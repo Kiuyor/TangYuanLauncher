@@ -124,8 +124,6 @@ def _procname_patch(ini_path, new_value):
     被用户保存覆盖时跳过恢复); 失败/无需改动返回 None。
     大小写不敏感 (通过 lowercase 副本定位, 切片仍取原字节)。"""
     nv = str(new_value or "").strip()
-    if not nv:
-        return None
     try:
         with open(ini_path, "rb") as f:
             raw = f.read()
@@ -184,7 +182,16 @@ def _procname_patch(ini_path, new_value):
     ws = val_raw[:len(val_raw) - len(val_raw.lstrip())]   # 仅 = 与值之间的前导空白
     # 已有 +connect (手动或上次残留): 剥离旧地址再追加新值, 保证新地址生效 (deep-review F2)
     old_val = _strip_connect_arg(old_val)
-    new_line = line[:eq + 1] + ws + old_val + b" +connect " + nv.encode("ascii", errors="replace")
+    if nv:
+        new_line = line[:eq + 1] + ws + old_val + b" +connect " + nv.encode("ascii", errors="replace")
+    elif old_val != val_raw.strip():
+        # 自动进服已禁用 (nv 为空): 剥离上次残留的 +connect 后写回。
+        # 残留来源: 启动后 10s 窗口内退出应用, poll 线程的 _procname_restore
+        # 未执行 → 旧地址永久留在 rev.ini, 下次启动仍连旧服 (deep-review 7轮 task-1 HIGH)。
+        # 返回 None: 剥离是清理不是临时 patch, 不进 restore 链。
+        new_line = line[:eq + 1] + ws + old_val
+    else:
+        return None   # 无残留, 无需改动
     if line.endswith(b"\r"):   # CRLF 文件: 保留行尾 \r, 避免中间态混行尾
         new_line += b"\r"
     try:
@@ -192,7 +199,7 @@ def _procname_patch(ini_path, new_value):
             f.write(raw[:ls] + new_line + raw[le:])
     except OSError:
         return None
-    return line, new_line
+    return (line, new_line) if nv else None
 
 
 def _procname_restore(ini_path, orig_line, new_line=None):
@@ -315,8 +322,6 @@ def main(page: ft.Page):
 
     # -- UI 引用 --
     status_msg = ft.Text("就绪", size=12, opacity=0.8)
-    dir_label = ft.Text("— 未定位 —", size=12, opacity=0.8)
-    path_chip = ft.Text("未加载文件", size=12, opacity=0.85)
     # 编码选择: 用 SegmentedButton 替代 Dropdown — 底部状态栏里 Dropdown 弹出菜单
     # 会被 frameless 圆角窗口边缘裁切(用户报告"被窗口强行裁接")
     enc_selector = ft.SegmentedButton(
@@ -367,15 +372,9 @@ def main(page: ft.Page):
     def update_title():
         base = "Rev.Ini 编辑器 · CS:GO 配置工具"
         page.title = ("* " if st["dirty"] else "") + base
-        path_chip.value = f"* {st['loaded_name']}" if st["dirty"] else st["loaded_name"]
         page.update()
 
     def refresh_dir():
-        if st["csgo_dir"]:
-            dir_label.value = st["csgo_dir"]
-            dir_label.tooltip = f"CS:GO 目录: {st['csgo_dir']}\n来源: {st['dir_source']}"
-        else:
-            dir_label.value = "— 未定位 —"
         page.update()
 
     # -- 文件对话框 (PowerShell, 不依赖 tkinter) --
@@ -622,8 +621,6 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             st["csgo_dir"] = os.path.dirname(path)
         st["dirty"] = False
         st["loaded_name"] = os.path.basename(path)
-        path_chip.value = st["loaded_name"]
-        path_chip.tooltip = path
         if enc_selector and model.source_encoding in ("gbk", "utf-8"):
             enc_selector.selected = [model.source_encoding]
             st["enc"] = model.source_encoding
@@ -888,7 +885,8 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         items = [ui.page_head(code_sec, group["title"], group.get("desc", ""))]
         # 字段双列网格 (design-system.md #13 FieldGrid): 组件库实现。
         # STRETCH 在 ListView 无界高度下塌陷 (两次实测 2026-08) → 用固定卡片高度:
-        # 内容已统一 (desc 固定 2 行 36px + 控件 height=40), 卡片高度恒定 = 等高
+        # 内容已统一 (desc 固定 2 行 36px + 控件统一 height=64), 卡片高度恒定 = 等高
+        # (deep-review 7轮 F4: 原注释误写 height=40, 实际 Dropdown/TextField 均 64)
         return ui.field_grid(group.get("fields", []), build_field_row, header=items[0])
 
     def build_tools_page(group):
@@ -1231,6 +1229,11 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 _patched = _procname_patch(ini, auto_join)   # 助手内部拼 " +connect <server>"
                 if _patched:
                     proc_orig, proc_new = _patched
+            else:
+                # 自动进服已禁用: 剥离上次残留的 +connect (deep-review 7轮 task-1 HIGH:
+                # 启动后 10s 窗口内退出应用 → poll 的 restore 未执行, 旧地址永久残留,
+                # 下次启动仍连旧服; nv="" 剥离模式返回 None 不进 restore 链)
+                _procname_patch(ini, "")
         except OSError:
             pass
         try:

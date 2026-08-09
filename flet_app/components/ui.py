@@ -113,7 +113,7 @@ def avatar(fallback_char: str, image_path: str | None = None) -> ft.Container:
     if image_path:
         try:
             content = ft.Image(src=image_path, width=S_AVATAR, height=S_AVATAR,
-                               fit=ft.ImageFit.COVER)
+                               fit=ft.BoxFit.COVER)  # 0.86.5 无 ImageFit, 用 BoxFit (deep-review 7轮 F1)
         except Exception:  # noqa: BLE001 - 头像加载失败回退首字
             content = None
     if content is None:
@@ -231,6 +231,8 @@ class LaunchButton(ft.Container):
         else:
             self.bgcolor = COL_BRAND
             self.shadow = SHADOW_BTN
+            # idle 显式复位 tooltip, 否则残留"游戏运行中" (deep-review 7轮 F5)
+            self.tooltip = tooltip or "启动游戏"
         if tooltip:
             self.tooltip = tooltip
         self.update()
@@ -372,9 +374,13 @@ def select_dark(options, selected=None, placeholder="", width=None, height=None,
                 border_color=COL_BORDER_VISIBLE) -> ft.Dropdown:
     """选项下拉框。props: options, selected, placeholder, width, height, on_select,
     filled/fill_color(0.86.5 Dropdown 必须 filled=True 才绘制 fill_color),
-    border_color(字段卡内用 INPUT_BORDER 等价 COL_BORDER_VISIBLE)"""
+    border_color(字段卡内用 INPUT_BORDER 等价 COL_BORDER_VISIBLE)。
+    options 兼容两种输入: 字符串列表(自动包 Option)或已构建的 Option 列表
+    (main.py rank/combo 分支传 Option, 直接透传——双重包装会让下拉全坏,
+    deep-review 7轮 task-4 迟到发现 HIGH)"""
     return ft.Dropdown(
-        options=[ft.dropdown.Option(o) for o in options],
+        options=[o if isinstance(o, ft.dropdown.Option) else ft.dropdown.Option(o)
+                 for o in options],
         value=selected,
         width=width,
         height=height,
@@ -566,7 +572,6 @@ def tool_card(cat: str, risk: str, name: str, on_run=None,
             top,
             ft.Text(name, size=FONT_14, weight=ft.FontWeight.W_700,
                     color=COL_TEXT_PRIMARY),
-            ft.Container(expand=True),
             status,
         ], spacing=SPACE_6),
         padding=SPACE_16,

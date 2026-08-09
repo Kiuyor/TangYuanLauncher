@@ -1,4 +1,4 @@
-; 汤圆启动器 (TangYuanLauncher) — Inno Setup 安装脚本 v2.2.0 (内嵌游戏版, 矢车菊蓝新 UI)
+; 汤圆启动器 (TangYuanLauncher) — Inno Setup 安装脚本 v2.2.1 (内嵌游戏版, 矢车菊蓝新 UI)
 ; 一份脚本两用:
 ;   完整安装包: ISCC installer.iss                          -> TangYuanLauncher-Setup-x.x.x.exe + 分卷(内嵌 14G 游戏)
 ;   更新包(已装用户, 无游戏分块): ISCC /DUPDATE_ONLY installer.iss -> TangYuanLauncher-Update-x.x.x.exe 单文件
@@ -8,7 +8,7 @@
 
 #define MyAppName "汤圆启动器"
 #define MyAppNameEn "TangYuanLauncher"
-#define MyAppVersion "2.2.0"
+#define MyAppVersion "2.2.1"
 #define MyAppPublisher "RevIniEditor"
 #define MyAppExeName "RevIniEditor.exe"
 
@@ -91,7 +91,11 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; 应用自己的配置目录不删(用户数据), 如需完全清除: Type: filesandordirs; Name: "{userappdata}\RevIniEditor"
+; 卸载删除解压出的游戏数据 (deep-review 7轮 packaging 发现2): {app}\game 是 7z 分块
+; 解压产物 (约 14GB), 不是用户配置 — 不删则卸载后永久残留磁盘。
+; 用户配置 ({userappdata}\RevIniEditor) 是用户数据, 保留不删。
+Type: filesandordirs; Name: "{app}\game"
+; 如需完全清除配置: Type: filesandordirs; Name: "{userappdata}\RevIniEditor"
 
 [Code]
 const

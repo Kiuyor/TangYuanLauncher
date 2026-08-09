@@ -66,9 +66,14 @@ def _clean_reg_leftover(csgo_dir: str, on_done: Callable[[bool, str], None] | No
     try:
         k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0,
                            winreg.KEY_SET_VALUE | winreg.KEY_QUERY_VALUE)
-    except OSError:
+    except FileNotFoundError:
         if on_done:
             on_done(True, "ActiveProcess 键不存在,无需清理(注册表干净)")
+        return
+    except OSError as e:
+        # 权限拒绝/组策略重定向等: 不是"干净", 是清理失败 (deep-review 7轮 工具链 F4)
+        if on_done:
+            on_done(False, f"无法访问注册表 ActiveProcess 键: {e}")
         return
     try:
         for v in ("SteamClientDll", "pid"):

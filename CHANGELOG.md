@@ -2,6 +2,21 @@
 
 本项目的所有重要变更均记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [2.2.1] - 2026-08-09
+
+### 修复:迟到批量结果甄别 + 打包/工具链增量 (deep-review round 7 补充)
+
+- **HIGH 残留 +connect**(task-1 迟到发现):启动后 10s 窗口内退出应用,poll 线程的 `_procname_restore` 未执行 → `+connect` 永久残留 rev.ini,之后禁用自动进服仍连旧服。`_procname_patch` 支持空值=剥离模式(清理残留,返回 None 不进 restore 链),`on_launch_click` 在 ConnectServer 为空时也调用剥离——`flet_app/main.py`
+- **HIGH select_dark 双重包装**(task-4 迟到发现):F4 迁移后 `select_dark` 内部 `ft.dropdown.Option(o)` 再包装 main.py rank/combo 分支传入的 Option 列表 → 下拉选项 key 全部变成 Option 对象字符串化,下拉全坏(界面语言下拉显示 `{key: schinese, text: 简体…}`)。改为 `isinstance` 透传已构建的 Option——`flet_app/components/ui.py`
+- **LOW 组件库 avatar API 错误**:`ui.avatar()` 用 `ft.ImageFit.COVER` 但 flet 0.86.5 无此属性(仅 `BoxFit`) — 死代码分支, 但按组件库签名传 image_path 即崩; 改 `ft.BoxFit.COVER`——`flet_app/components/ui.py`
+- **LOW 工具卡垂直 spacer**:`tool_card` 内部 `ft.Container(expand=True)` 在 ListView 无界高度下有 RenderFlex 风险, 删除(卡高自适应)——`flet_app/components/ui.py`
+- **LOW 孤儿控件清理**:`dir_label`/`path_chip` 在 round-5 重构后未挂载但持续更新(dead code), 已删除定义与全部更新语句(顶栏无文件名显示是设计决策, 极简)——`flet_app/main.py`
+- **LOW tooltip 残留**:`LaunchButton.set_state('idle')` 不传 tooltip 时红点留“游戏运行中”; idle 显式复位“启动游戏”——`flet_app/components/ui.py`
+- **MEDIUM 卸载游戏数据残留**:`[UninstallDelete]` 无条目, 卸载后 `{app}\game` 14GB 解压产物永久残留; 新增 `Type: filesandordirs; Name: "{app}\game"`(用户配置 {userappdata} 仍保留)——`packaging/installer.iss`
+- **LOW 构建脚本错误**:`build_nuitka.bat` ISCC 提示路径不存在(Program Files (x86)) 修为实际位置; `make_dist.py` 死引用注释改为实际流程——`packaging/build_nuitka.bat`
+- **LOW 注释修正**:字段网格注释“控件 height=40”实际 Dropdown/TextField 均 64(双列等高实际成立)——`flet_app/main.py`
+- **LOW 注册表清理权限错误误报**:`_clean_reg_leftover` OpenKey 拒绝时误报“注册表干净”; 区分 FileNotFoundError(干净) 与权限类错误(报失败)——`app/tools.py`
+
 ## [2.2.0] - 2026-08-09
 
 ### 新增:已装用户更新包 (UPDATE_ONLY)
