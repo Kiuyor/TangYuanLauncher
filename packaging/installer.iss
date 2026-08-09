@@ -1,4 +1,8 @@
 ; 汤圆启动器 (TangYuanLauncher) — Inno Setup 安装脚本 v2.2.0 (内嵌游戏版, 矢车菊蓝新 UI)
+; 一份脚本两用:
+;   完整安装包: ISCC installer.iss                          -> TangYuanLauncher-Setup-x.x.x.exe + 分卷(内嵌 14G 游戏)
+;   更新包(已装用户, 无游戏分块): ISCC /DUPDATE_ONLY installer.iss -> TangYuanLauncher-Update-x.x.x.exe 单文件
+; 更新包: 不带 chunks.iss/不智能选盘/不做空间校验/不写 .installed_ok, 只覆盖启动器+字体, 靠 AppId 升级检测沿用原目录
 ; 编译: "C:\Users\75017\AppData\Local\Programs\Inno Setup 6\ISCC.exe" packaging\installer.iss
 ; 注意: 本文件 UTF-8 编码, Inno 6 默认 Unicode 安装器, 中文安全
 
@@ -24,11 +28,21 @@ Compression=lzma2/max
 ; 非分块文件(主程序+7z+字体 ~180M)全在第一卷 → 无随机跳卷, 重插盘提示不会实际触发。保留 Solid 保压缩率。
 SolidCompression=yes
 ; 单文件安装器有 ~4.2GB 上限 (Inno/Windows 结构限制), 5.9G 内嵌游戏必须分卷
+; UPDATE_ONLY 更新包内容 ~200MB 压缩后 < 2G, 单文件不分卷 (分发更友好)
+#ifdef UPDATE_ONLY
+DiskSpanning=no
+#else
 DiskSpanning=yes
+#endif
 DiskSliceSize=2147483647
 ; 输出
 OutputDir=..\dist
+#ifdef UPDATE_ONLY
+; 更新包 (无游戏分块, 已装用户秒升)
+OutputBaseFilename=TangYuanLauncher-Update-{#MyAppVersion}
+#else
 OutputBaseFilename=TangYuanLauncher-Setup-{#MyAppVersion}
+#endif
 ; 安装器图标(用应用图标)
 SetupIconFile=assets\revini.ico
 ; 权限: 普通用户可装(智能默认盘为数据盘根, 无需管理员); 游戏启动时才弹 UAC (Loader 需要)
@@ -64,7 +78,10 @@ Source: "fonts\JetBrainsMono-Medium.ttf"; DestDir: "{app}\fonts"; Flags: ignorev
 Source: "fonts\JetBrainsMono-SemiBold.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
 Source: "fonts\JetBrainsMono-Bold.ttf"; DestDir: "{app}\fonts"; Flags: ignoreversion
 ; 游戏分块契约 (由 prepare_chunks.py 生成: #define ChunkCount + Source 行, 不带 [Files] 头)
+; UPDATE_ONLY (更新包) 不带游戏分块
+#ifndef UPDATE_ONLY
 #include "..\build\chunks.iss"
+#endif
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -99,6 +116,7 @@ begin
     Result := Free;
 end;
 
+#ifndef UPDATE_ONLY
 function PickBestDefaultDir: String;
 var
   SysDrive, Drive, Root, BestRoot: String;
@@ -130,12 +148,15 @@ begin
   else
     Result := BestRoot + 'tangyuangame';
 end;
+#endif
 
 procedure InitializeWizard;
 begin
+#ifndef UPDATE_ONLY
   { 仅当用户没传 /DIR、也没手改(仍等于默认值)时才智能覆盖, 保留命令行与用户选择优先权 }
   if CompareText(WizardForm.DirEdit.Text, ExpandConstant('{autopf}\{#MyAppNameEn}')) = 0 then
     WizardForm.DirEdit.Text := PickBestDefaultDir;
+#endif
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -150,6 +171,7 @@ begin
   { 空格仅提示, 不阻止 }
   if Pos(' ', Dir) > 0 then
     MsgBox('提示: 安装路径包含空格。建议改为不含空格的路径(游戏组件对空格路径兼容性不佳)。' + #13#10 + '当前: ' + Dir, mbInformation, MB_OK);
+#ifndef UPDATE_ONLY
   { 目标盘空间: 必须 >= 16 GB }
   if (Length(Dir) >= 3) and (Dir[2] = ':') then
     Root := Copy(Dir, 1, 3)
@@ -173,8 +195,10 @@ begin
     Result := False;
     Exit;
   end;
+#endif
 end;
 
+#ifndef UPDATE_ONLY
 procedure ExtractGameChunks;
 var
   I: Integer;
@@ -201,6 +225,7 @@ begin
   end;
   SaveStringToFile(ExpandConstant('{app}\') + MARKER, 'ok', False);
 end;
+#endif
 
 procedure ApplyRandomName;
 var
@@ -281,8 +306,10 @@ begin
     RegWriteStringValue(HKCU, 'Software\Microsoft\Windows NT\CurrentVersion\Fonts',
       'JetBrains Mono Bold (TrueType)', ExpandConstant('{app}\fonts\JetBrainsMono-Bold.ttf'));
     { 完整性标记存在 => 更新覆盖安装, 跳过游戏解压; 缺失 => 解压(含中断自愈) }
+#ifndef UPDATE_ONLY
     if not FileExists(ExpandConstant('{app}\') + MARKER) then
       ExtractGameChunks;
+#endif
     ApplyRandomName;
   end;
 end;

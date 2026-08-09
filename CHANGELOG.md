@@ -4,6 +4,12 @@
 
 ## [2.2.0] - 2026-08-09
 
+### 新增:已装用户更新包 (UPDATE_ONLY)
+
+- `installer.iss` 增加 `UPDATE_ONLY` 条件编译开关,一份脚本两用:完整包(`ISCC installer.iss`, 内嵌游戏 4 文件) / 更新包(`ISCC /DUPDATE_ONLY`, 单文件 ~66MB 无游戏分块)
+- 更新包:不带 chunks/不智能选盘/不做空间校验/不写 `.installed_ok`,靠 AppId 升级检测沿用原安装目录,游戏 14GB 完全不动,秒装;已端到端验证(装 2.2.0 完整包 → 装更新包 → 目录沿用/昵称保留/游戏未动/exe 启动正常)
+- 产物:`dist\TangYuanLauncher-Update-2.2.0.exe`(单文件, `DiskSpanning=no` 条件化避免误分卷)
+
 ### 修复:第 7 轮深度审查 (deep-review round 7, 3 MEDIUM + 2 LOW + 窗口/工具链域 9 项)
 
 - **MEDIUM 交错 section 索引分歧**:`ini_model._refresh_tail` 修复交错重复 section(A→B→A)——原实现扫到其他 section 头即 break,tail 截断到首个同名块,remove 后 `set()` 把新键插进第一个块;现改为跟踪当前 section 归属扫到文件尾,与全量重算语义完全一致(500 轮差分 + 定向场景全过)——`app/ini_model.py`
