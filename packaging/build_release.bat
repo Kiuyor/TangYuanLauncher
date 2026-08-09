@@ -1,11 +1,11 @@
 @echo off
 rem ============================================================
-rem  汤圆启动器 v2.2.0 发行版构建流水线 (内嵌游戏版)
+rem  汤圆启动器 v2.2.2 发行版构建流水线 (内嵌游戏版)
 rem  1) 游戏补丁 + 分块压缩 (prepare_chunks.py)
 rem  2) 拷贝 7z 运行时 (安装器解压用)
 rem  3) Nuitka 构建启动器 (build_nuitka.bat)
 rem  4) Inno Setup 打包 (installer.iss)
-rem  产物: dist\TangYuanLauncher-Setup-2.2.0.exe
+rem  产物: dist\TangYuanLauncher-Setup-2.2.2.exe
 rem ============================================================
 setlocal
 cd /d "%~dp0\.."
@@ -28,5 +28,5 @@ echo [4/5] Inno Setup 打包...
 "%ISCC%" packaging\installer.iss
 if errorlevel 1 ( echo [ERROR] ISCC 失败 & exit /b 1 )
 
-echo [5/5] 完成: dist\TangYuanLauncher-Setup-2.2.0.exe
+echo [5/5] 完成: dist\TangYuanLauncher-Setup-2.2.2.exe
 endlocal

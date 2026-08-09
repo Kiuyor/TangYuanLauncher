@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import subprocess
 import sys
 import time
@@ -44,6 +45,17 @@ FILE_REPLACEMENTS = [
 ]
 
 
+def _marker_line_present(data: bytes, marker: bytes) -> bool:
+    """幂等判定: marker 是否作为**完整 token**出现在行首(行首可选空白)。
+
+    与 tools.py _speedup_startgame 的行首锚定同语义 (deep-review 8轮 F3):
+    裸子串 `marker in data` 会把 b"timeout /t 2" 误匹配 b"timeout /t 20 /nobreak"
+    (未提速变体) 或 banner/ECHO 文本里的同形字样, 导致假幂等跳过、发行包静默漏提速。
+    行首锚定 + 词边界 (后随空白或行尾, 含 CRLF 的 \\r) 保证只认真正的目标行。
+    """
+    return re.search(rb"(?m)^[ \t]*" + re.escape(marker) + rb"(?=[ \t\r]|$)", data) is not None
+
+
 def apply_patch(game_dir: str, rel: str, old: bytes, new: bytes, done_marker: bytes) -> bool:
     """就地字节级替换; 幂等(已含 done_marker 跳过); 改前备份 .bak_<ts>。返回是否改动。"""
     p = os.path.join(game_dir, rel)
@@ -52,7 +64,7 @@ def apply_patch(game_dir: str, rel: str, old: bytes, new: bytes, done_marker: by
         return False
     with open(p, "rb") as f:
         data = f.read()
-    if done_marker in data:
+    if _marker_line_present(data, done_marker):
         print(f"  [skip] {rel}: 已是目标状态")
         return False
     if old not in data:

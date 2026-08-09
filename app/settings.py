@@ -50,9 +50,11 @@ def save_settings(data: dict) -> bool:
             cur.pop(k)
         else:
             cur[k] = v
+    # tmp 在 try 外定义: os.makedirs 失败(APPDATA 不可写/磁盘满/权限受限)时
+    # except 分支仍可安全引用, 避免 NameError (deep-review 8轮 F2)
+    tmp = SETTINGS_PATH + ".tmp"
     try:
         os.makedirs(SETTINGS_DIR, exist_ok=True)
-        tmp = SETTINGS_PATH + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(cur, f, ensure_ascii=False, indent=2)
             f.flush()

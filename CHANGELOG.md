@@ -2,6 +2,14 @@
 
 本项目的所有重要变更均记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [2.2.2] - 2026-08-09
+
+### 修复:第 8 轮深度审查 (deep-review round 8, 2 MEDIUM + 1 LOW)
+
+- **MEDIUM `+connect` 多残留剥离不彻底**:`_strip_connect_arg` 只剥第一个 `+connect`,多个残留时第二个旧地址仍留在 ProcName(空值剥离模式清理不完整, v2.2.1 残留修复的多残留形态复发)。改为循环剥离全部 `+connect`(词边界检查保持)——`flet_app/main.py`
+- **MEDIUM settings 写入崩溃**:`save_settings` 在 `os.makedirs` 失败(APPDATA 不可写/磁盘满/权限受限)时 except 分支引用未定义的 `tmp` → 抛未捕获 NameError,「指定目录」流程静默中断且设置丢失。`tmp` 定义移到 try 外,失败路径正确返回 False——`app/settings.py`
+- **LOW 打包幂等误判**:`prepare_chunks.apply_patch` 幂等判定用裸子串 `marker in data`,`timeout /t 2` 会误匹配 `timeout /t 20 /nobreak`(未提速变体)或 banner/ECHO 文本 → 发行包静默漏提速。改为行首锚定 + 词边界正则(含 CRLF `\r`, 与 tools.py `_speedup_startgame` 已修实现对齐)——`packaging/prepare_chunks.py`
+
 ## [2.2.1] - 2026-08-09
 
 ### 修复:迟到批量结果甄别 + 打包/工具链增量 (deep-review round 7 补充)

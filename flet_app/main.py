@@ -95,25 +95,28 @@ def _strip_connect_arg(val: bytes) -> bytes:
     """从启动参数中剥离已有的 +connect <地址> 参数(含其前导空白), 返回清理后字节。
     无 +connect 时原样返回。用于自动进服更新时替换旧地址 (deep-review F2):
     残留/手写的旧 +connect 不清理的话, 新地址永远进不去。
-    词边界: +connect 后必须紧跟空白或串尾, 防误剥 +connectivity 等参数 (deep-review 4轮 LOW5)。"""
-    low = val.lower()
-    i = low.find(b"+connect")
-    while i >= 0:
+    词边界: +connect 后必须紧跟空白或串尾, 防误剥 +connectivity 等参数 (deep-review 4轮 LOW5)。
+    循环剥离全部 +connect (deep-review 8轮 F1): 原实现只剥第一个,
+    多个 +connect 时第二个残留, 空值剥离模式清理不彻底。"""
+    while True:
+        low = val.lower()
+        i = low.find(b"+connect")
+        while i >= 0:
+            j = i + len(b"+connect")
+            if j == len(low) or low[j:j + 1] in (b" ", b"\t"):
+                break
+            i = low.find(b"+connect", j)
+        if i < 0:
+            return val
         j = i + len(b"+connect")
-        if j == len(low) or low[j:j + 1] in (b" ", b"\t"):
-            break
-        i = low.find(b"+connect", j)
-    if i < 0:
-        return val
-    j = i + len(b"+connect")
-    while j < len(val) and val[j:j + 1] in (b" ", b"\t"):
-        j += 1                       # 跳过 +connect 与地址之间的空白
-    while j < len(val) and val[j:j + 1] not in (b" ", b"\t"):
-        j += 1                       # 跳过地址 token (到下一个空白或串尾)
-    k = i
-    while k > 0 and val[k - 1:k] in (b" ", b"\t"):
-        k -= 1                       # 向前吃掉 +connect 前的空白
-    return (val[:k] + val[j:]).strip()
+        while j < len(val) and val[j:j + 1] in (b" ", b"\t"):
+            j += 1                       # 跳过 +connect 与地址之间的空白
+        while j < len(val) and val[j:j + 1] not in (b" ", b"\t"):
+            j += 1                       # 跳过地址 token (到下一个空白或串尾)
+        k = i
+        while k > 0 and val[k - 1:k] in (b" ", b"\t"):
+            k -= 1                       # 向前吃掉 +connect 前的空白
+        val = (val[:k] + val[j:]).strip()
 
 
 def _procname_patch(ini_path, new_value):

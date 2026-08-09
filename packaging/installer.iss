@@ -1,4 +1,4 @@
-; 汤圆启动器 (TangYuanLauncher) — Inno Setup 安装脚本 v2.2.1 (内嵌游戏版, 矢车菊蓝新 UI)
+; 汤圆启动器 (TangYuanLauncher) — Inno Setup 安装脚本 v2.2.2 (内嵌游戏版, 矢车菊蓝新 UI)
 ; 一份脚本两用:
 ;   完整安装包: ISCC installer.iss                          -> TangYuanLauncher-Setup-x.x.x.exe + 分卷(内嵌 14G 游戏)
 ;   更新包(已装用户, 无游戏分块): ISCC /DUPDATE_ONLY installer.iss -> TangYuanLauncher-Update-x.x.x.exe 单文件
@@ -8,7 +8,7 @@
 
 #define MyAppName "汤圆启动器"
 #define MyAppNameEn "TangYuanLauncher"
-#define MyAppVersion "2.2.1"
+#define MyAppVersion "2.2.2"
 #define MyAppPublisher "RevIniEditor"
 #define MyAppExeName "RevIniEditor.exe"
 
