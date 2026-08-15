@@ -1,7 +1,7 @@
 """打包时游戏预处理: 补丁 + 分块压缩 + 生成 chunks.iss
 
 用法: python prepare_chunks.py <game_dir> <out_dir>
-  game_dir = D:\\re-la\\game (将被就地打补丁: startgame.bat 提速 + rev.ini 中文, 幂等+备份)
+  game_dir = D:\\re-la\\CSGO (将被就地打补丁: startgame.bat 提速 + rev.ini 中文, 幂等+备份)
   out_dir  = build\\chunks (输出 game.partNN.7z + 父目录生成 chunks.iss 契约)
 
 契约(子 agent B 的 installer.iss 依赖):

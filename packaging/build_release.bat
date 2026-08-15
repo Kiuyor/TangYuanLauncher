@@ -12,7 +12,7 @@ cd /d "%~dp0\.."
 set ISCC=C:\Users\75017\AppData\Local\Programs\Inno Setup 6\ISCC.exe
 
 echo [1/5] 游戏补丁 + 分块压缩 (约 15-30 分钟)...
-".venv311\Scripts\python.exe" packaging\prepare_chunks.py D:\re-la\game build\chunks
+".venv311\Scripts\python.exe" packaging\prepare_chunks.py D:\re-la\CSGO build\chunks
 if errorlevel 1 ( echo [ERROR] 分块失败 & exit /b 1 )
 
 echo [2/5] 拷贝 7z 运行时...

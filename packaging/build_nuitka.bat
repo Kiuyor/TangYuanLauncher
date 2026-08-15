@@ -26,6 +26,10 @@ set "FLET_ENGINE=%USERPROFILE%\.flet\client\flet-desktop-full-0.86.5\flet"
   --nofollow-import-to=pytest ^
   --nofollow-import-to=flet_web ^
   --enable-plugin=no-qt ^
+  --lto=auto ^
+  --remove-output ^
+  --nofollow-import-to=PIL ^
+  --nofollow-import-to=zstandard ^
   main.py
 
 if errorlevel 1 (
@@ -61,5 +65,6 @@ if not exist "build\nuitka\main.dist\assets\Loader_opt23.exe" (
 )
 echo [OK] build done: build\nuitka\main.dist\RevIniEditor.exe + engine + icon.ico + assets
 echo [OK] next: "C:\Users\75017\AppData\Local\Programs\Inno Setup 6\ISCC.exe" packaging\installer.iss
-pause
+rem 成功路径不 pause: build_release.bat 的 call 链不能被阻塞 (deep-review 双 agent 审查 LOW-1);
+rem 失败路径(上方各 error 分支)保留 pause 供双击运行时查看错误
 endlocal
