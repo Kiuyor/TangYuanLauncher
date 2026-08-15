@@ -1,7 +1,7 @@
 @echo off
 rem Nuitka directory build - TangYuan Launcher v2.2.2
 rem Usage: double-click or run from cmd
-rem Output: build\nuitka\main.dist\  (引擎拷贝见下方 xcopy; 游戏分块压缩见 prepare_chunks.py)
+rem Output: build\nuitka\main.dist\ (engine copy below; game chunks via prepare_chunks.py)
 setlocal
 cd /d "%~dp0\.."
 set "PYTHONPATH="
@@ -65,6 +65,6 @@ if not exist "build\nuitka\main.dist\assets\Loader_opt23.exe" (
 )
 echo [OK] build done: build\nuitka\main.dist\RevIniEditor.exe + engine + icon.ico + assets
 echo [OK] next: "C:\Users\75017\AppData\Local\Programs\Inno Setup 6\ISCC.exe" packaging\installer.iss
-rem 成功路径不 pause: build_release.bat 的 call 链不能被阻塞 (deep-review 双 agent 审查 LOW-1);
-rem 失败路径(上方各 error 分支)保留 pause 供双击运行时查看错误
+rem No pause on success: must not block the call chain from build_release.bat (review LOW-1);
+rem failure paths (error branches above) keep pause for double-click users to read errors
 endlocal
