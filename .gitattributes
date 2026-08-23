@@ -1,0 +1,2 @@
+# 行尾约定: bat 批处理文件必须 CRLF (cmd 的 ^ 续行在 LF 下解析错乱, 构建失败)
+*.bat text eol=crlf
