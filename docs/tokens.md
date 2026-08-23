@@ -55,6 +55,8 @@
 | `status-green` | 成功/在线 | `#10b981` | 在线圆点、状态栏勾、低风险、完成 | `var(--green)` | `COL_OK` |
 | `status-amber` | 警告/运行中 | `#f59e0b` | 中风险、运行中状态 | (CSS 内联) | `COL_WARN` |
 | `status-red` | 错误/高危 | `#ef4444` | 关闭按钮 hover、高风险、失败状态 | (CSS 内联) | `COL_ERR` |
+| `warn-bg` | 警告提示条底 | `rgba(245,158,11,0.12)` | CFG 页启动参数提示条 | (CSS 内联) | `COL_WARN_BG` |
+| `err-bg` | 错误提示条底 | `rgba(239,68,68,0.12)` | CFG 页预设缺失提示条 | (CSS 内联) | `COL_ERR_BG` |
 
 ### 1.5 边框/描边 (Border)
 
@@ -75,7 +77,7 @@
 | `hover-track` | 悬停轨道 | `rgba(255,255,255,0.12)` | switch-track 底 | 开关未开态轨道 | `COL_SWITCH_INACTIVE_TRACK`(flet 实机 #2A2730) |
 | `thumb-shadow` | 滑块投影 | `rgba(0,0,0,0.4)` | switch thumb | 开关滑块阴影 | `COL_SWITCH_INACTIVE_THUMB`(flet 实机 #8A8494) |
 | `dot-glow` | 在线点辉光 | `rgba(16,185,129,0.15)` | `.server-dot.online` box-shadow | 在线状态点外辉光 | `SHADOW_DOT_ONLINE` |
-| `hover-btnbar` | 顶栏按钮 hover | `rgba(255,255,255,0.07)` | `.btn-bar:hover` | 顶栏按钮悬停提亮 | (flet 原生按钮 hover 由主题处理) |
+| `hover-btnbar` | 顶栏按钮 hover | `rgba(255,255,255,0.07)` | `.btn-bar:hover` | 顶栏按钮悬停提亮 | `COL_BTN_BAR_HOVER` |
 | `hover-winbtn` | 窗口按钮 hover | `rgba(255,255,255,0.08)` | `.win-btn:hover` `.chip:hover` | 窗口按钮/chip 悬停提亮 | (ui.win_btn style hovered) |
 | `hover-scrollbar` | 滚动条 hover | `rgba(255,255,255,0.2)` | `.content::-webkit-scrollbar-thumb:hover` | 滚动条滑块悬停 | (flet 原生滚动条) |
 | `shadow-window` | 窗口投影 | `0 24px 80px rgba(0,0,0,0.6)` | `.window` | 窗口浮起投影 | `SHADOW_WINDOW` |
@@ -109,15 +111,19 @@
 
 ## 3. 圆角 Radius
 
+> 2026-08-22 用户决策: 全 UI 矩形化 — 4/6/8/16px 圆角全部改为直角(窗口/卡片/按钮/输入框/标签),
+> 仅保留形状元素(头像/启动按钮正圆、状态胶囊/版本徽章/开关胶囊)。chips 推荐项同步改方形。
+> 以下表格保留历史值并标注现状; `RADIUS_LG/SM/XS/2XS` 常量在 Flet 侧已无 UI 使用(保留定义防回归)。
+
 | Token | 值 | 用途 | 场景 | Flet |
 |-------|-----|------|------|------|
-| `radius-circle` | 50% | 头像/启动按钮/滑块 | `.avatar` `.btn-launch` `.thumb` | `RADIUS_CIRCLE`(999) |
-| `radius-pill` | 999px | 胶囊 | `.version-tag` `.server-monitor` `.chip` `.switch-track` | `RADIUS_PILL` |
-| `radius-lg` | 16px | 窗口外壳 | `.window` | `RADIUS_LG` |
+| `radius-circle` | 50% | 头像/启动按钮/滑块(保留) | `.avatar` `.btn-launch` `.thumb` | `RADIUS_CIRCLE`(999) |
+| `radius-pill` | 999px | 胶囊: 版本徽章/状态胶囊/开关(保留); ~~chips~~ 2026-08 改方形 | `.version-tag` `.server-monitor` `.switch-track` | `RADIUS_PILL` |
+| `radius-lg` | 16px | ~~窗口外壳~~ → 矩形(2026-08-22) | ~~`.window`~~ | `RADIUS_LG`(已无 UI 使用) |
 | `radius-md` | 12px | 预览工具栏(非产品) | `.toolbar` | `RADIUS_MD` |
-| `radius-sm` | 8px | 卡片/按钮/导航项/面板 | `.config-card` `.tool-card` `.btn-bar` `.nav-item` `.rec-panel` `.enc-group` `.btn-run` | `RADIUS_SM` |
-| `radius-xs` | 6px | 输入/下拉/窗口控制钮/编码钮 | `.input-dark` `.select-dark` `.win-btn` `.enc-btn` | `RADIUS_XS` |
-| `radius-2xs` | 4px | 代码标签/类别标签 | `.code-tag` `.cat-tag` | `RADIUS_2XS` |
+| `radius-sm` | 8px | ~~卡片/按钮/导航项/面板~~ → 矩形(2026-08-22) | ~~`.config-card` `.tool-card` 等~~ | `RADIUS_SM`(已无 UI 使用) |
+| `radius-xs` | 6px | ~~输入/下拉/窗口控制钮/编码钮~~ → 矩形(2026-08-22) | ~~`.input-dark` `.select-dark` 等~~ | `RADIUS_XS`(已无 UI 使用) |
+| `radius-2xs` | 4px | ~~代码标签/类别标签~~ → 矩形(2026-08-22) | ~~`.code-tag` `.cat-tag`~~ | `RADIUS_2XS`(已无 UI 使用) |
 
 ---
 

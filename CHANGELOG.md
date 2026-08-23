@@ -2,6 +2,30 @@
 
 本项目的所有重要变更均记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [2.2.3] - 2026-08-23
+
+### 新增:CFG 配置页 + s0up 预设默认集合
+
+- **CFG 配置页**(编辑页导航第 4 项):表单化编辑 s0up 预设——4 组 23 字段(鼠标/准星/声音/性能),范围校验标红不保存,保存前自动 `.bak` 备份,独立 dirty(返回/切页/关窗确认),数字字段等宽字体,卡片等高双列——`flet_app/main.py` + `app/cfg_fields.py`(新增)
+- **准星透明度 0-100% 显示**:文件值 0-255 自动换算(255→100),玩家直觉——`app/cfg_fields.py`
+- **s0up CFG 预设 V1.7 默认植入**:13 个预设文件 + autoexec.cfg 桥接(`exec auto.cfg`)进游戏目录,打包链同步注入(幂等 md5);`assets/s0up_preset/` 入库为单一事实源——`packaging/prepare_chunks.py` + `assets/`
+- **启动器优化默认集合**:newloader.exe 植入游戏根目录(原版 Loader.exe 并存)
+- **皮肤补全默认集合**:游戏源 items_730.bin 同步扩展版(原版备份 items_730_bak.bin,分块原有)
+- **启动参数默认含 `+exec auto.cfg`**:预设启动即生效(CFG 页检测缺失时提示一键添加)——`app/fields.py`
+
+### 变更:全 UI 矩形化 (2026-08-22 用户决策)
+
+- 窗口/卡片/按钮/输入框/下拉/标签/chips/对话框全部直角(Flutter Windows 圆角窗口四角黑边问题无可靠解法,顺势统一矩形风格);头像/启动按钮正圆、状态胶囊/版本徽章保留
+- 设计文档四件套同步(DESIGN.md 圆角表、design-system.md 组件映射、tokens.md 圆角令牌、preview v1.html :root)
+
+### 修复
+
+- **HIGH 设置按钮点击失效**:僵尸 main.py 进程并存(只杀 flet.exe 不杀 python)导致点击事件路由到旧实例;清干净进程重启即恢复——运维动作,代码无需改
+- **CFG 保存无反馈**:状态栏新增临时提示(绿字 3 秒自动消失,连发不覆盖)+ 保存按钮「已保存」反馈——`flet_app/main.py`
+- **CFG 页单卡撑满整行**:奇数卡片落单时直接 append 无宽度约束(准星透明度卡 648px 巨宽);单卡包 Row 约束宽度——`flet_app/main.py`
+- **编码切换控件重做**:ft.SegmentedButton 选中/未选中无法分离样式(0.86.5 状态字典失效),自绘 enc_group(ghost 底 + 选中段 20% 主色浅底)——`flet_app/components/ui.py` + `flet_app/main.py`
+- **s0up 预设生效机制**:autoexec 桥接被 config.cfg 覆盖,改启动参数 `+exec auto.cfg`(最后执行)——`app/fields.py`
+
 ## [2.2.2] - 2026-08-09
 
 ### 修复:第 8 轮深度审查 (deep-review round 8, 2 MEDIUM + 1 LOW)

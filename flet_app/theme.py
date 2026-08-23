@@ -39,12 +39,17 @@ COL_TEXT_DISABLED = "#6b7280"
 COL_OK = "#10b981"             # 成功/在线/低风险
 COL_WARN = "#f59e0b"           # 运行中/中风险
 COL_ERR = "#ef4444"            # 失败/高危
+COL_WARN_BG = "#1ff59e0b"      # 警告提示条底 rgba(245,158,11,0.12) (tokens §1.4 warn-bg)
+COL_ERR_BG = "#1fef4444"       # 错误提示条底 rgba(239,68,68,0.12) (tokens §1.4 err-bg)
 
 # 边框
 COL_BORDER_SUBTLE = "#0dffffff"    # rgba(255,255,255,0.05)
 COL_BORDER_VISIBLE = "#1affffff"   # rgba(255,255,255,0.1)
 COL_BORDER_BRAND = "#4d6495ED"     # rgba(100,149,237,0.3)
 COL_FOCUS_RING = "#336495ED"       # rgba(100,149,237,0.2)
+
+# 顶栏按钮 hover 提亮 (tokens.md §1.6 hover-btnbar 收编; 2026-08 UI 审查落地)
+COL_BTN_BAR_HOVER = "#12ffffff"    # rgba(255,255,255,0.07)
 
 # 启动态 (收编硬编码, rules.md §2.3)
 COL_LAUNCH_BUSY = COL_BRAND_HOVER  # 启动中 = 主色 hover

@@ -43,10 +43,7 @@ from flet_app.theme import (
     FONT_MONO,
     H_BTN_RUN,
     H_INPUT,
-    RADIUS_2XS,
     RADIUS_PILL,
-    RADIUS_SM,
-    RADIUS_XS,
     S_AVATAR,
     S_BTN_LAUNCH,
     SHADOW_BTN,
@@ -101,7 +98,7 @@ def win_btn(icon: ft.Icons, tooltip: str, on_click=None, variant="normal") -> ft
             bgcolor={"": ft.Colors.TRANSPARENT,
                      "hovered": COL_ERR if variant == "close" else COL_BG_GHOST_2},
             color={"": COL_TEXT_MUTED, "hovered": ft.Colors.WHITE},
-            shape=ft.RoundedRectangleBorder(radius=RADIUS_XS),
+            shape=ft.RoundedRectangleBorder(radius=0),  # 矩形 (2026-08 全 UI 去圆角)
         ),
     )
 
@@ -113,7 +110,8 @@ def avatar(fallback_char: str, image_path: str | None = None) -> ft.Container:
     if image_path:
         try:
             content = ft.Image(src=image_path, width=S_AVATAR, height=S_AVATAR,
-                               fit=ft.BoxFit.COVER)  # 0.86.5 无 ImageFit, 用 BoxFit (deep-review 7轮 F1)
+                               fit=ft.BoxFit.COVER,
+                               filter_quality=ft.FilterQuality.HIGH)  # 低清 avatar.dat 缩放出锯齿, HIGH 平滑 (2026-08 UI 审查)
         except Exception:  # noqa: BLE001 - 头像加载失败回退首字
             content = None
     if content is None:
@@ -148,7 +146,9 @@ class ServerMonitor(ft.Row):
     def __init__(self, label="在线", count="", status="online"):
         self._dot = ft.Container(width=8, height=8, border_radius=RADIUS_PILL,
                                  bgcolor=COL_OK)
-        self._label = ft.Text(label, size=FONT_15, color=COL_TEXT_DIM,
+        # label 用 text-muted 而非 text-dim: 灰字对比度实测偏低 (~2:1),
+        # 提亮一档保证低亮度屏可读 (2026-08 UI 审查落地, design-system #7 已同步)
+        self._label = ft.Text(label, size=FONT_15, color=COL_TEXT_MUTED,
                               font_family=FONT_MONO)
         self._count = ft.Text(count, size=FONT_15, weight=ft.FontWeight.W_600,
                               color=COL_TEXT_SECONDARY, font_family=FONT_MONO)
@@ -245,7 +245,7 @@ def code_tag(text: str) -> ft.Container:
         content=ft.Text(text, size=FONT_10, color=COL_BRAND,
                         font_family=FONT_MONO),
         bgcolor=COL_BRAND_BG_10,
-        border_radius=RADIUS_2XS,
+        # 矩形 (2026-08 全 UI 去圆角; 原 RADIUS_2XS)
         padding=_pad(h=6, v=2),
     )
 
@@ -320,7 +320,7 @@ def config_card(title: str, desc: str, control, tag: str | None = None,
     card = ft.Container(
         content=ft.Column([top, control], spacing=SPACE_10),
         padding=SPACE_16,
-        border_radius=RADIUS_SM,
+        # 矩形 (2026-08 用户决策去圆角, 全 UI 卡片直角)
         bgcolor=COL_BG_CARD,
         border=_border_all(1, COL_BORDER_SUBTLE),
     )
@@ -358,7 +358,8 @@ def input_dark(value="", placeholder="", mono=False, multiline=False,
         border_color=COL_BORDER_VISIBLE,
         focused_border_color=COL_BRAND,
         content_padding=_pad(h=12, v=10),
-        border_radius=RADIUS_XS,
+        # 矩形 (2026-08 全 UI 去圆角; 原 RADIUS_XS)
+        border_radius=0,
         text_style=ft.TextStyle(color=COL_TEXT_PRIMARY,
                                 font_family=FONT_MONO if mono else None),
         hint_style=ft.TextStyle(color=COL_TEXT_DIM),
@@ -389,7 +390,8 @@ def select_dark(options, selected=None, placeholder="", width=None, height=None,
         bgcolor=COL_BG_INPUT,
         border_color=border_color,
         focused_border_color=COL_BRAND,
-        border_radius=RADIUS_XS,
+        # 矩形 (2026-08 全 UI 去圆角; 原 RADIUS_XS)
+        border_radius=0,
         content_padding=_pad(h=12),
         hint_text=placeholder,
         on_select=on_select,
@@ -416,7 +418,7 @@ class Chip(ft.Container):
         super().__init__(
             content=self._text,
             padding=_pad(h=10, v=5),
-            border_radius=RADIUS_PILL,
+            # 方形 (2026-08 用户决策: 推荐启动项胶囊改方形; 原 RADIUS_PILL)
             bgcolor=COL_BRAND_BG_18 if added else COL_BG_GHOST,
             border=_border_all(1, COL_BORDER_BRAND if added else COL_BORDER_VISIBLE),
             on_click=lambda e: self.toggle(),
@@ -448,7 +450,7 @@ def cat_tag(text: str) -> ft.Container:
                         color=COL_BRAND_LIGHT),
         bgcolor=COL_BRAND_BG_15,
         border=_border_all(1, COL_BORDER_BRAND),
-        border_radius=RADIUS_2XS,
+        # 矩形 (2026-08 全 UI 去圆角; 原 RADIUS_2XS)
         padding=_pad(h=8, v=2),
     )
 
@@ -482,7 +484,7 @@ class RunButton(ft.FilledButton):
             style=ft.ButtonStyle(
                 bgcolor=COL_BRAND,
                 color=ft.Colors.WHITE,
-                shape=ft.RoundedRectangleBorder(radius=RADIUS_SM),
+                shape=ft.RoundedRectangleBorder(radius=0),  # 矩形 (2026-08 去圆角)
             ),
             on_click=on_click,
         )
@@ -496,7 +498,7 @@ class RunButton(ft.FilledButton):
         self.style = ft.ButtonStyle(
             bgcolor=COL_BRAND_HOVER if e.data == "true" else COL_BRAND,
             color=ft.Colors.WHITE,
-            shape=ft.RoundedRectangleBorder(radius=RADIUS_SM),
+            shape=ft.RoundedRectangleBorder(radius=0),  # 矩形 (2026-08 去圆角)
         )
         self.update()
 
@@ -532,7 +534,7 @@ def rec_panel(chips, title: str = "推荐启动项", expand: int = 2) -> ft.Cont
         ], spacing=8),
         bgcolor=COL_BG_GHOST_3,
         border=_border_all(1, COL_BORDER_SUBTLE),
-        border_radius=RADIUS_SM,
+        # 矩形 (2026-08 用户决策去圆角)
         padding=SPACE_12,
         expand=expand,
     )
@@ -575,7 +577,7 @@ def tool_card(cat: str, risk: str, name: str, on_run=None,
             status,
         ], spacing=SPACE_6),
         padding=SPACE_16,
-        border_radius=RADIUS_SM,
+        # 矩形 (2026-08 用户决策去圆角)
         bgcolor=COL_BG_CARD,
         border=_border_all(1, COL_BORDER_SUBTLE),
         expand=expand,
@@ -594,13 +596,66 @@ def tool_card(cat: str, risk: str, name: str, on_run=None,
     return card
 
 
+# ==================== 27. 编码切换 EncGroup ====================
+def enc_group(segments, selected, on_change=None) -> ft.Container:
+    """编码切换 (design-system.md #27, HTML .enc-group 结构)。
+
+    2026-08 UI 审查: 原 ft.SegmentedButton 的 style 只能整体应用(选中/未选中
+    无法分离, 亮蓝实心被用户反馈"难看", 状态字典在 0.86.5 上失效回退 M3 默认)
+    → 自绘: ghost 底容器 + 分段按钮, 选中段 = 20% 主色浅底 + 主色浅字,
+    未选中 = 透明 + 灰字 (与 chip 已添加态/导航激活态同一视觉语言)。
+    props: segments([(value, label), ...]), selected(当前值), on_change(value)。
+    """
+    state = {"sel": selected}
+    btns: list[ft.Container] = []
+
+    def _render():
+        for (value, _), btn in zip(segments, btns):
+            active = value == state["sel"]
+            btn.bgcolor = COL_BRAND_BG_20 if active else ft.Colors.TRANSPARENT
+            btn.border = _border_all(1, COL_BORDER_BRAND if active else ft.Colors.TRANSPARENT)
+            btn.content.color = COL_BRAND_LIGHT if active else COL_TEXT_DIM  # type: ignore[union-attr]
+
+    def _set(v):
+        if v == state["sel"]:
+            return
+        state["sel"] = v
+        _render()
+        if on_change:
+            on_change(v)
+
+    for value, label in segments:
+        btn = ft.Container(
+            content=ft.Text(label, size=FONT_11, weight=ft.FontWeight.W_600,
+                            color=COL_TEXT_DIM),
+            padding=_pad(h=12, v=5),
+            # 矩形 (2026-08 全 UI 去圆角; 原 RADIUS_XS)
+            on_click=lambda e, v=value: _set(v),
+            ink=False,
+        )
+        btns.append(btn)
+    _render()
+    return ft.Container(
+        content=ft.Row(btns, spacing=2),
+        bgcolor=COL_BG_GHOST,   # HTML .enc-group rgba(255,255,255,0.05)
+        border=_border_all(1, COL_BORDER_SUBTLE),
+        # 矩形 (2026-08 用户决策去圆角)
+        padding=_pad(h=3, v=3),
+    )
+
+
 # ==================== 26. 状态栏 StatusBar ====================
-def status_bar(enc_selector, status_msg: ft.Text | None = None) -> ft.Container:
-    """编辑页底部状态栏: 左=状态图标+消息(可选), 右=编码切换。props: encSelector, statusMsg
+def status_bar(enc_selector, status_msg: ft.Text | None = None,
+               status_icon: ft.Icon | None = None) -> ft.Container:
+    """编辑页底部状态栏: 左=状态图标+消息(可选), 右=编码切换。props: encSelector, statusMsg, statusIcon
 
     status_msg: 可选状态文本 (加载/保存错误临时显示, main.py set_status 用); None 时仅图标。
+    status_icon: 可选状态图标控件 (main.py 持有引用, 错误时切 ERROR 红图标);
+                 None 时内部创建默认绿勾。常态"仅图标"由调用方传空 status_msg 保证
+                 (design-system.md #26, 2026-08 UI 审查落地)。
     """
-    left = [ft.Icon(ft.Icons.CHECK_CIRCLE, size=15, color=COL_OK)]
+    left = [status_icon if status_icon is not None
+            else ft.Icon(ft.Icons.CHECK_CIRCLE, size=15, color=COL_OK)]
     if status_msg is not None:
         left.append(status_msg)
     return ft.Container(

@@ -1,5 +1,5 @@
 @echo off
-rem Nuitka directory build - TangYuan Launcher v2.2.2
+rem Nuitka directory build - TangYuan Launcher v2.2.3
 rem Usage: double-click or run from cmd
 rem Output: build\nuitka\main.dist\ (engine copy below; game chunks via prepare_chunks.py)
 setlocal
@@ -8,6 +8,7 @@ set "PYTHONPATH="
 set "FLET_ENGINE=%USERPROFILE%\.flet\client\flet-desktop-full-0.86.5\flet"
 
 ".venv311\Scripts\python.exe" -m nuitka --standalone ^
+  --assume-yes-for-downloads ^
   --output-filename=RevIniEditor.exe ^
   --output-dir=build\nuitka ^
   --windows-console-mode=disable ^
@@ -15,8 +16,8 @@ set "FLET_ENGINE=%USERPROFILE%\.flet\client\flet-desktop-full-0.86.5\flet"
   --windows-product-name="TangYuanLauncher" ^
   --windows-company-name="RevIniEditor" ^
   --windows-file-description="CS:GO rev.ini config tool" ^
-  --windows-file-version=2.2.2.0 ^
-  --windows-product-version=2.2.2.0 ^
+  --windows-file-version=2.2.3.0 ^
+  --windows-product-version=2.2.3.0 ^
   --include-package=flet ^
   --include-package=flet_desktop ^
   --include-package-data=flet ^
@@ -58,6 +59,11 @@ rem packaged builds (app package is embedded, __file__ unreliable) - ship them h
 mkdir "build\nuitka\main.dist\assets" >nul 2>nul
 copy /y "assets\Loader_opt23.exe" "build\nuitka\main.dist\assets\" >nul
 copy /y "assets\items_730.bin" "build\nuitka\main.dist\assets\" >nul
+rem s0up 预设随包 (CFG 页一键重新植入的数据源, 2026-08-23)
+if exist "assets\s0up_preset\" (
+  mkdir "build\nuitka\main.dist\assets\s0up_preset" 2>nul
+  copy /y "assets\s0up_preset\*" "build\nuitka\main.dist\assets\s0up_preset\" >nul
+)
 if not exist "build\nuitka\main.dist\assets\Loader_opt23.exe" (
   echo [ERROR] assets copy failed
   pause

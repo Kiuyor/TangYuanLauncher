@@ -47,7 +47,7 @@
 > - #2 TitleBar / #9 EditTitleBar → `ft.Row` + `ui.win_btn`/`ft.OutlinedButton`/`ft.FilledButton` 组合
 > - #10 BarButton → `ft.OutlinedButton`/`ft.FilledButton`(样式经 ButtonStyle)
 > - #11 SidebarNav → `ft.NavigationRail`(indicator 透明, 选中色走 selected_*_text_style)
-> - #27 EncGroup → `ft.SegmentedButton`
+> - #27 EncGroup → `ui.enc_group`(自绘, 2026-08 从 SegmentedButton 迁出, 见 #27)
 > - #28 Switch → `ft.Switch`
 > 其余 #3-#8/#12-#26 已全部实现为 `ui.*` 组件(flet_app/components/ui.py)。
 
@@ -57,13 +57,13 @@
 
 ### 1. 窗口外壳 Window
 
-- **用途**: 应用窗口容器,承载标题栏 + 内容;圆角裁切 + 浮起投影
+- **用途**: 应用窗口容器,承载标题栏 + 内容;**矩形边缘**(2026-08 用户决策,放弃圆角 — Flutter Windows 圆角窗口四角黑边问题无法可靠解决,改矩形彻底消除)
 - **Props**:
   - `size`: `launcher`(360×510)/ `edit`(784×600)
   - `label`: 窗口标注文本(仅预览用)
 - **何时用**: 两个主视图各一个
 - **何时不用**: 弹窗/对话框不套窗口外壳
-- **Flet**: `ft.Window`(frameless, 透明底, border_radius=16, shadow `shadow-window`) + `ft.Row`/`ft.Column` 内容
+- **Flet**: `ft.Window`(frameless, 深色背景 `bg-deep`, 无圆角) + `ft.Row`/`ft.Column` 内容
 
 ### 2. 标题栏 TitleBar(主页)
 
@@ -87,7 +87,7 @@
 - **Props**: `icon`(i-settings/i-minus/i-x), `variant`(normal/close)
 - **何时用**: 标题栏右上角;配置按钮仅主页
 - **何时不用**: 不用于主操作(主操作用 BarButton/RunButton)
-- **Flet**: `ft.IconButton`(28×28, radius 6, hover bg `rgba(255,255,255,0.08)`;close hover bg `status-red`)
+- **Flet**: `ft.IconButton`(28×28, **radius 0 矩形** (2026-08-22 全 UI 去圆角), hover bg `rgba(255,255,255,0.08)`;close hover bg `status-red`)
 
 ### 5. 头像 Avatar
 
@@ -112,7 +112,7 @@
 - **何时用**: 主页昵称下方
 - **何时不用**: 无服务器地址时不显示人数(数据契约见 DESIGN.md)
 - **⚠ 数据红线**: 人数必须来自 A2S 真实查询,离线禁止展示人数(JS 已实现隐藏逻辑)
-- **Flet**: `ft.Container`(pill, bg `bg-ghost`, border `border-subtle`)内 Row: 圆点(8px `status-green`+3px 浅绿晕/离线 `text-dim`)+ 标签(15px mono `text-dim`)+ 人数(15px 600 mono `text-secondary`)
+- **Flet**: `ft.Container`(pill, bg `bg-ghost`, border `border-subtle`)内 Row: 圆点(8px `status-green`+3px 浅绿晕/离线 `text-dim`)+ 标签(15px mono **`text-muted`**)+ 人数(15px 600 mono `text-secondary`)。标签用 text-muted 而非 text-dim: 灰字对比度实测偏低,提亮一档保证低亮度屏可读(2026-08 UI 审查落地)
 
 ### 8. 启动按钮 LaunchButton
 
@@ -137,7 +137,7 @@
 - **Props**: `icon`, `label`, `variant`(normal/primary)
 - **何时用**: 编辑页标题栏;primary 变体用于「保存」
 - **何时不用**: 不作为内容区按钮(内容区用 RunButton);不带图标不放这里
-- **Flet**: `ft.OutlinedButton` 风格 Container(h=34, radius 8, border `border-subtle`, bg `bg-ghost-2`)→ primary: bg `brand` 白字 700
+- **Flet**: `ft.OutlinedButton`(h=34, **radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `bg-ghost-2` → hover `hover-btnbar`, border `border-subtle` → hover `border-visible`, 字 12px 500 `text-secondary`)→ primary: `ft.FilledButton`(h=34, bg `brand` 白字 700)。灰底细边框低调化,保存实心突出主操作(2026-08 UI 审查落地, HTML `.btn-bar` 同款)
 
 ### 11. 侧栏导航 SidebarNav
 
@@ -145,7 +145,7 @@
 - **Props**: `items`(icon+label 列表), `activeIndex`
 - **何时用**: 编辑页左侧固定栏
 - **何时不用**: 主页无导航;不超过 3 项
-- **Flet**: `ft.Container`(w=96, bg `bg-sidebar`, 右边框 `border-subtle`)内 Column;激活项: bg `brand` 10% + 左 3px `brand` 指示条 + 文字/图标 `brand-soft`
+- **Flet**: `ft.NavigationRail`(min_width=96, bg `bg-sidebar`, 右边框 `border-subtle`;激活项: indicator `brand` 10% 半透明底 + 圆角 8 + 图标/文字 `brand-soft`)。HTML 的左 3px 主色指示条 NavigationRail 无法表达,以半透明 indicator 底近似——实心 indicator 会盖住图标(用户实机反馈 2026-08),10% 半透明只提亮背景不遮图标(2026-08 UI 审查落地)
 
 ### 12. 页头 PageHead
 
@@ -169,7 +169,7 @@
 - **Props**: `title`, `desc`, `tag`(可选 CodeTag), `control`(Input/Select), `title_expand`(标题撑满,键名徽章贴右), `desc_lines`(>0 时描述固定行高容器,双列等高用 2)
 - **何时用**: 常用设置字段
 - **何时不用**: 工具卡用 ToolCard;双列内 hover 不右移
-- **Flet**: `ui.config_card()`(padding 16, radius 8, bg `bg-card`, border `border-subtle`;hover bg `bg-ghost-2` + border `border-brand`, 双列内无位移;desc_lines=2 时 desc 容器高 36px)
+- **Flet**: `ui.config_card()`(padding 16, **radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `bg-card`, border `border-subtle`;hover bg `bg-ghost-2` + border `border-brand`, 双列内无位移;desc_lines=2 时 desc 容器高 36px)
 
 ### 15. 代码键名标签 CodeTag
 
@@ -185,7 +185,7 @@
 - **Props**: `value`, `placeholder`, `mono`, `multiline`, `height`, `fontSize`, `width`(字段卡内 236), `onChange`, `maxLength`, `textAlign`
 - **何时用**: 需文本输入的字段
 - **何时不用**: 选项类用 SelectDark;布尔用 Switch
-- **Flet**: `ui.input_dark()`(组件库实现;radius 6, bg `bg-input`, border `border-visible`, focus border `brand`;textarea: multiline 多行 16px mono;字段卡内传 height=None 保持 flet 默认 ~63px 高——用户否决过 40px 扁框)
+- **Flet**: `ui.input_dark()`(组件库实现;**radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `bg-input`, border `border-visible`, focus border `brand`;textarea: multiline 多行 16px mono;字段卡内传 height=None 保持 flet 默认 ~63px 高——用户否决过 40px 扁框)
 
 ### 17. 下拉框 SelectDark
 
@@ -193,7 +193,7 @@
 - **Props**: `options`, `selected`, `placeholder`, `width`, `height`, `onSelect`, `filled`/`fillColor`(0.86.5 必须 filled 才绘制底色), `borderColor`
 - **何时用**: 需选项的字段
 - **何时不用**: 文本输入用 InputDark;布尔用 Switch
-- **Flet**: `ui.select_dark()`(组件库实现;字段卡内 width=236 height=64 filled 匹配 TextField 高度;注意: Dropdown 弹出层可能被圆角窗口裁切——Flet 落地已实测)
+- **Flet**: `ui.select_dark()`(组件库实现;**radius 0 矩形** (2026-08-22 全 UI 去圆角), 字段卡内 width=236 height=64 filled 匹配 TextField 高度;注意: Dropdown 弹出层可能被圆角窗口裁切——Flet 落地已实测)
 
 ### 18. 推荐项 Chip
 
@@ -201,7 +201,7 @@
 - **Props**: `label`, `added`(bool)
 - **何时用**: 加载器推荐启动项(右栏竖排)
 - **何时不用**: 不作为普通信息标签(用 CatTag/RiskTag)
-- **Flet**: `ft.Container`(pill, border `border-visible`, bg `bg-ghost`;added: bg `brand` 18% + border `border-brand` + 字 `brand-light`;mono 11px)
+- **Flet**: `ft.Container`(**方形** (2026-08-22 用户决策: 推荐启动项胶囊改方形, 原 pill), border `border-visible`, bg `bg-ghost`;added: bg `brand` 18% + border `border-brand` + 字 `brand-light`;mono 11px)
 - ⚠ 竖排时: 单行省略(width 100%, nowrap + ellipsis + min-width 0),防溢出
 
 ### 19. 推荐面板 RecPanel
@@ -210,7 +210,7 @@
 - **Props**: `title`, `chips`, `expand`(Row 内分栏比例,LaunchSplit 右栏 2)
 - **何时用**: 仅加载器右栏
 - **何时不用**: 内容区其他位置
-- **Flet**: `ui.rec_panel()`(组件库实现, deep-review 7轮 F4 抽取;padding 12, radius 8, bg `bg-ghost-3`, border `border-subtle`)
+- **Flet**: `ui.rec_panel()`(组件库实现, deep-review 7轮 F4 抽取;padding 12, **radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `bg-ghost-3`, border `border-subtle`)
 
 ### 20. 启动分栏 LaunchSplit
 
@@ -226,7 +226,7 @@
 - **Props**: `catTag`, `risk`(低/中/高 或 low/mid/high), `name`, `onRun`, `expand`(2×2 网格等宽);返回 Container 附带 `_run_btn`/`_status` 引用供驱动状态
 - **何时用**: 修复工具页
 - **何时不用**: 设置字段用 ConfigCard
-- **Flet**: `ui.tool_card()`(padding 16, radius 8, bg `bg-card`, border `border-subtle`;hover border `border-brand`;内部组合 CatTag + RiskTag + RunButton + ToolStatus)
+- **Flet**: `ui.tool_card()`(padding 16, **radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `bg-card`, border `border-subtle`;hover border `border-brand`;内部组合 CatTag + RiskTag + RunButton + ToolStatus)
 
 ### 22. 类别标签 CatTag
 
@@ -234,7 +234,7 @@
 - **Props**: `text`
 - **何时用**: ToolCard 顶行左侧
 - **何时不用**: 非工具上下文
-- **Flet**: `ft.Container`(radius 4, bg `brand` 15%, border `border-brand`, 字 `brand-light` 10px 600)
+- **Flet**: `ft.Container`(**radius 0 矩形** (2026-08-22 全 UI 去圆角; 原 4px), bg `brand` 15%, border `border-brand`, 字 `brand-light` 10px 600)
 
 ### 23. 风险标签 RiskTag
 
@@ -250,7 +250,7 @@
 - **Props**: `label`(运行/运行中), `disabled`, `icon`(play/clock)
 - **何时用**: ToolCard 顶行右侧
 - **何时不用**: 编辑页顶栏操作用 BarButton
-- **Flet**: `ft.FilledButton`(h=32, radius 8, bg `brand`, 白字 700 12px;disabled opacity 0.5)
+- **Flet**: `ft.FilledButton`(h=32, **radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `brand`, 白字 700 12px;disabled opacity 0.5)
 
 ### 25. 工具状态 ToolStatus
 
@@ -263,18 +263,18 @@
 ### 26. 状态栏 StatusBar
 
 - **用途**: 编辑页底部:左=状态图标(仅图标)+可选状态消息,右=编码切换
-- **Props**: `encSelector`, `statusMsg`(可选 Text,加载/保存错误临时显示;None 时仅图标)
+- **Props**: `encSelector`, `statusMsg`(可选 Text,加载/保存错误临时显示;None 时仅图标), `statusIcon`(可选 Icon,调用方持有引用以便错误时切红 ERROR 图标;None 时内部创建默认绿勾)
 - **何时用**: 仅编辑页底部
 - **何时不用**: 主页不放状态栏(坑位记录);常驻状态文字已删,只留图标
-- **Flet**: `ui.status_bar()`(h=64, bg `bg-deep`, 上边框 `border-subtle`)内 Row: 左 Icon(check-circle 15px `status-green`) + 可选消息,右 EncGroup
+- **Flet**: `ui.status_bar()`(h=64, bg `bg-deep`, 上边框 `border-subtle`)内 Row: 左 Icon(check-circle 15px `status-green`;错误时切 error-outline `status-red`)+ 可选消息,右 EncGroup。常态仅图标: 成功/普通状态不显示文字,错误才显示中文错误消息(2026-08 UI 审查落地)
 
 ### 27. 编码切换 EncGroup
 
 - **用途**: ANSI/UTF-8 分段切换
-- **Props**: `active`(ansi/utf8)
+- **Props**: `segments`([(value, label)]), `selected`(当前值), `onChange`(选中回调)
 - **何时用**: 状态栏右侧
 - **何时不用**: 其他位置
-- **Flet**: `ft.Container`(分段控件: bg `rgba(255,255,255,0.05)` radius 8 padding 3;激活项 bg `brand` 白字)
+- **Flet**: `ui.enc_group()`(组件库实现, 2026-08 UI 审查落地: 原 ft.SegmentedButton 的 style 只能整体应用、选中/未选中无法分离样式, 亮蓝实心被用户反馈难看 → 自绘 HTML `.enc-group` 结构: ghost 底容器 + 细边框 + 分段按钮(**全矩形**, 2026-08-22 去圆角); 选中段 = `brand` 20% 浅底 + `brand-light` 字 + `border-brand` 边框, 未选中 = 透明 + `text-dim` 字; 11px/600; 与 chip 已添加态/导航激活态同一视觉语言)
 
 ### 28. 开关 Switch(预留)
 
@@ -295,9 +295,10 @@
 
 编辑页 (784×600)
 └─ Window → EditTitleBar(BarButton×4 + Save + WinBtn×2)
-   → edit-body: SidebarNav(nav-item×3) + content
+   → edit-body: SidebarNav(nav-item×4) + content
    ├─ group-0 常用设置: PageHead + FieldGrid(ConfigCard×6)
    ├─ group-1 加载器:   PageHead + ConfigCard(LaunchSplit: textarea + RecPanel)
-   └─ group-2 修复工具: PageHead + 超时行 + ToolGrid(ToolCard×4)
+   ├─ group-2 修复工具: PageHead + 超时行 + ToolGrid(ToolCard×4)
+   └─ group-3 CFG 配置: 顶部说明 + 提示条×N + 组标题×4 + ConfigCard×23 (2026-08-23 新增, 见 DESIGN.md CFG 配置页)
    → StatusBar(Icon + EncGroup)
 ```

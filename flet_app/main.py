@@ -7,17 +7,25 @@
 import asyncio
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import threading
 import time
 import urllib.request
-from datetime import datetime
 
 import flet as ft
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import VERSION
+from app.cfg_fields import (
+    FIELD_INDEX,
+    GROUPS,
+    S0UP_FILES,
+    apply_values,
+    parse_cfg,
+)
 from app.fields import (
     FIELD_GROUPS,
     RANK_DISPLAY,
@@ -46,9 +54,12 @@ from flet_app.theme import (
     COL_BORDER_SUBTLE,
     COL_BORDER_VISIBLE,
     COL_BRAND,  # 品牌主色 #6495ED
+    COL_BRAND_BG_10,  # 导航激活底 10% (design-system #11)
     COL_BRAND_LIGHT,  # 浅 #9DB9F3
     COL_BRAND_SOFT,  # 柔 #8FB1F0
+    COL_BTN_BAR_HOVER,  # 顶栏按钮 hover 提亮 (tokens §1.6 hover-btnbar)
     COL_ERR,
+    COL_ERR_BG,  # 错误提示条底 (CFG 页缺失提示)
     COL_OK,  # 成功/在线 #10b981
     COL_SWITCH_INACTIVE_THUMB,
     COL_SWITCH_INACTIVE_TRACK,
@@ -56,6 +67,7 @@ from flet_app.theme import (
     COL_TEXT_PRIMARY,  # 主文字原名 (ON_BRAND 引用)
     COL_TEXT_SECONDARY,  # 次文字 #e2e8f0
     COL_WARN,
+    COL_WARN_BG,  # 警告提示条底
     FONT_36,
     FONT_CN,
     FONT_MONO,
@@ -284,12 +296,29 @@ def _screen_center():
         return None
 
 
+def _preset_src_dir() -> str | None:
+    """s0up 预设备份源 (CFG 页一键重新植入 / 打包链共用):
+    开发 = 仓库 assets/s0up_preset; 打包后 = 安装目录 assets/s0up_preset (installer.iss 随包)。"""
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cands = [
+        os.path.join(here, "assets", "s0up_preset"),
+        os.path.join(os.path.dirname(sys.executable), "assets", "s0up_preset"),
+    ]
+    for c in cands:
+        if os.path.isdir(c):
+            return c
+    return None
+
+
 def main(page: ft.Page):
     page.title = "Rev.Ini 编辑器 · CS:GO 配置工具"
     page.theme_mode = ft.ThemeMode.DARK
     page.theme = ft.Theme(color_scheme_seed=COL_BRAND, font_family=FONT_CN)
     page.padding = 0
     page.bgcolor = ft.Colors.TRANSPARENT
+    # 窗口背景透明 (2026-08-23 实机定位: bgcolor 不透明后 Flutter 窗口点击事件失效,
+    # 用户反馈"设置按钮有悬停反馈但点击没反应", 日志确认事件未到 Python)。
+    # 黑边问题已随矩形化消失 — 容器无圆角铺满窗口, 窗口背景不外露, 无需不透明兜底
     page.window.bgcolor = ft.Colors.TRANSPARENT
     page.window.width, page.window.height = WIN_HOME
     page.window.min_width, page.window.min_height = WIN_MIN
@@ -317,6 +346,7 @@ def main(page: ft.Page):
         from app.settings import get_user_csgo_dir
         auto_dir = get_user_csgo_dir() or ""
     st = {"ini_path": "", "csgo_dir": auto_dir,
+          "cfg_dirty": False,
           "dir_source": "自动定位" if auto_dir else "未定位",
           "loaded_name": "NO FILE LOADED", "dirty": False}
     model = None
@@ -324,27 +354,64 @@ def main(page: ft.Page):
     nav_index = 0
 
     # -- UI 引用 --
-    status_msg = ft.Text("就绪", size=12, opacity=0.8)
-    # 编码选择: 用 SegmentedButton 替代 Dropdown — 底部状态栏里 Dropdown 弹出菜单
-    # 会被 frameless 圆角窗口边缘裁切(用户报告"被窗口强行裁接")
-    enc_selector = ft.SegmentedButton(
-        segments=[
-            ft.Segment(value="gbk", label="ANSI"),
-            ft.Segment(value="utf-8", label="UTF-8"),
-        ],
-        selected=["gbk"],
-        style=ft.ButtonStyle(bgcolor=COL_BRAND, color=ft.Colors.WHITE),   # 选中分段主色白字
-        on_change=lambda e: _on_enc_change(e),
-    )
+    # 状态栏 (design-system.md #26): 常态仅绿勾图标, 无文字 (v1.16 定稿);
+    # status_msg 仅错误时显示 (set_status err 分支), status_icon 错误时切红 ERROR 图标
+    status_msg = ft.Text("", size=12, color=COL_ERR)
+    status_icon = ft.Icon(ft.Icons.CHECK_CIRCLE, size=15, color=COL_OK)
+    # 编码选择: ui.enc_group 自绘分段 (design-system #27)。原 SegmentedButton
+    # 亮蓝实心被用户反馈"难看"且选中/未选中无法分离样式 (0.86.5 style 整体应用),
+    # 改为 ghost 底容器 + 20% 主色浅底选中段 (2026-08 UI 审查)
+    enc_selector = ui.enc_group([("gbk", "ANSI"), ("utf-8", "UTF-8")], "gbk",
+                                on_change=lambda v: _on_enc_change(v))
     save_btn = None   # 实际定义在标题栏构建处 (editor_head, 2026-08 新设计: 保存移顶栏)
     content_area = ft.Container(expand=True, bgcolor=COL_BG_MAIN)
 
     # -- 工具函数 --
     def set_status(text, ok=False, err=False):
-        status_msg.value = text
-        status_msg.color = COL_OK if ok else (COL_ERR if err else None)
-        status_msg.opacity = 1.0 if (ok or err) else 0.7
+        # 仅图标定稿 (v1.16): 成功/普通状态不显示文字, 只留绿勾;
+        # 错误时显示中文错误文字 + 红色 ERROR 图标 (临时显示, 可被下次状态覆盖)
+        if ok:
+            status_msg.value = ""
+            status_icon.name = ft.Icons.CHECK_CIRCLE
+            status_icon.color = COL_OK
+        elif err:
+            status_msg.value = text
+            status_msg.color = COL_ERR
+            status_icon.name = ft.Icons.ERROR_OUTLINE
+            status_icon.color = COL_ERR
+        else:
+            status_msg.value = ""
+            status_icon.name = ft.Icons.CHECK_CIRCLE
+            status_icon.color = COL_OK
         page.update()
+
+    # 临时提示 (2026-08 保存反馈): v1.16 常态仅图标, 但保存等关键操作无任何
+    # 文字反馈会显得"没反应"(用户反馈 CFG 保存状态栏不提示) — 显示 3 秒后自动清除
+    _flash_seq = {"n": 0}
+
+    def _flash_status(text, err=False):
+        _flash_seq["n"] += 1
+        seq = _flash_seq["n"]
+        status_msg.value = text
+        status_msg.color = COL_ERR if err else COL_OK
+        status_icon.name = ft.Icons.ERROR_OUTLINE if err else ft.Icons.CHECK_CIRCLE
+        status_icon.color = COL_ERR if err else COL_OK
+        page.update()
+        threading.Timer(3.0, lambda: _clear_flash(seq)).start()
+
+    def _clear_flash(seq):
+        if seq != _flash_seq["n"]:
+            return   # 已有更新的提示, 不提前覆盖
+        def _do():
+            try:
+                status_msg.value = ""
+                page.update()
+            except Exception:  # noqa: BLE001, S110 - 清除兜底
+                pass
+        try:
+            page.run_thread(_do)
+        except Exception:  # noqa: BLE001, S110 - 清除兜底
+            pass
 
     def confirm_discard(on_confirm, title="未保存的修改", message="当前修改尚未保存。继续将丢弃这些修改。"):
         """有未保存修改时弹确认; 用户确认后执行 on_confirm"""
@@ -358,10 +425,13 @@ def main(page: ft.Page):
             title=ft.Text(title),
             content=ft.Text(message),
             actions=[
-                ft.OutlinedButton("取消", on_click=lambda e: _close()),
-                ft.FilledButton("丢弃并继续", on_click=lambda e: (_close(), on_confirm())),
+                ft.OutlinedButton("取消", on_click=lambda e: _close(),
+                                  style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=0))),  # 矩形 (2026-08 去圆角)
+                ft.FilledButton("丢弃并继续", on_click=lambda e: (_close(), on_confirm()),
+                                style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=0))),  # 矩形 (2026-08 去圆角)
             ],
             actions_alignment=ft.MainAxisAlignment.END,
+            shape=ft.RoundedRectangleBorder(radius=0),  # 矩形 (2026-08 去圆角)
         )
         page.show_dialog(dlg)
 
@@ -425,7 +495,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             return out if out else ""
         except subprocess.TimeoutExpired:
             # 对话框被超时终止: 明确提示, 不再静默吞掉用户选择
-            set_status("DIALOG TIMEOUT // 对话框超时(5 分钟),请重试", err=True)
+            set_status("对话框超时(5 分钟),请重试", err=True)
             return ""
         except Exception:  # noqa: BLE001 - 对话框调用兜底, 失败返回空选择
             return ""
@@ -452,7 +522,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 ok = set_user_csgo_dir(p)
                 if not ok:
                     # 持久化失败: 会话内仍生效, 但重启后遗忘 (deep-review 7轮 工具链 F3)
-                    set_status("DIR SET // 目录已使用,但保存到本机失败(重启后需重新指定)", err=True)
+                    set_status("目录已使用,但保存到本机失败(重启后需重新指定)", err=True)
                     refresh_dir()
                     ini = os.path.join(p, "rev.ini")
                     if os.path.isfile(ini):
@@ -462,7 +532,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 ini = os.path.join(p, "rev.ini")
                 if os.path.isfile(ini):
                     load_file(ini)
-                set_status(f"DIR SET // {p}", ok=True)
+                set_status(f"已指定目录: {p}", ok=True)
 
             if not _looks_like_csgo_dir(p):
                 # 非 CSGO 目录: 弹确认让用户知情选择, 而不是警告后被成功消息瞬间覆盖 (deep-review F6)
@@ -475,10 +545,13 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                     content=ft.Text(f"{p} 未检测到 csgo.exe。仍要使用该目录吗?\n"
                                     "(启动游戏/修复工具可能无法正常定位)"),
                     actions=[
-                        ft.OutlinedButton("取消", on_click=lambda e: _close()),
-                        ft.FilledButton("仍然使用", on_click=lambda e: (_close(), guard_dirty(_apply))),
+                        ft.OutlinedButton("取消", on_click=lambda e: _close(),
+                                          style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=0))),  # 矩形 (2026-08 去圆角)
+                        ft.FilledButton("仍然使用", on_click=lambda e: (_close(), guard_dirty(_apply)),
+                                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=0))),  # 矩形 (2026-08 去圆角)
                     ],
                     actions_alignment=ft.MainAxisAlignment.END,
+                    shape=ft.RoundedRectangleBorder(radius=0),  # 矩形 (2026-08 去圆角)
                 )
                 page.show_dialog(dlg)
             else:
@@ -534,14 +607,23 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             elif ftype in ("combo", "rank"):
                 vr["v"] = str(raw)
                 if isinstance(ctrl, ft.Dropdown):
-                    if vr["v"] in [o.key for o in ctrl.options]:
+                    keys = [o.key for o in ctrl.options]
+                    if vr["v"] in keys:
                         ctrl.value = vr["v"]
                         ctrl.error_text = None
                     else:
-                        # 原值不在选项中(rank 非法值/combo 未知值): 不静默显示默认项,
-                        # 用 error_text 暴露真实值; collect 对 bad 字段跳过写回 (deep-review 4轮 M3)
-                        ctrl.value = None
-                        ctrl.error_text = "原值 " + repr(vr["v"]) + " 不在选项中, 保存将保留原文"
+                        # 大小写不敏感匹配 (2026-08 实机: 文件 Language=English 大写 vs
+                        # items 小写 english → 误报"不在选项中"红字; 命中则选中对应项,
+                        # 不改 vr["v"], collect 时值相同不写回, 文件原值保留)
+                        low_match = next((k for k in keys if str(k).lower() == vr["v"].lower()), None)
+                        if low_match:
+                            ctrl.value = low_match
+                            ctrl.error_text = None
+                        else:
+                            # 原值不在选项中(rank 非法值/combo 未知值): 不静默显示默认项,
+                            # 用 error_text 暴露真实值; collect 对 bad 字段跳过写回 (deep-review 4轮 M3)
+                            ctrl.value = None
+                            ctrl.error_text = "原值 " + repr(vr["v"]) + " 不在选项中, 保存将保留原文"
             elif ftype == "textarea":
                 vr["v"] = str(raw)
                 # v2 UI: ctrl 是 ft.Row([ta, gap, rec_panel]) 3:2 分栏 (deep-review 5轮 HIGH-1:
@@ -610,7 +692,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                     warnings.simplefilter("always")
                     preloaded = RevIni.load(path)
             except OSError as e:
-                set_status(f"LOAD ERROR // {e}", err=True)
+                set_status(f"加载失败: {e}", err=True)
                 return False
             preloaded_warning = any(issubclass(w.category, RuntimeWarning) for w in caught)
         model = preloaded
@@ -631,9 +713,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         refresh_dir()
         update_title()
         if enc_warning:
-            set_status(f"LOADED // {st['loaded_name']} · ⚠ 编码损坏,已用替换字符加载,保存前请确认备份", err=True)
+            set_status(f"已加载 {st['loaded_name']},编码异常,已用替换字符加载,保存前请确认备份", err=True)
         else:
-            set_status(f"LOADED // {st['loaded_name']}", ok=True)
+            set_status(f"已加载 {st['loaded_name']}", ok=True)
         return True
 
     def on_save(_=None):
@@ -647,14 +729,14 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             model.save(st["ini_path"], encoding=enc)
         except (UnicodeError, OSError, ValueError) as e:
             # ValueError: 未知编码 (L1: save 不再静默回退 UTF-8, 直接报错)
-            set_status(f"SAVE ERROR // {e}", err=True)
+            set_status(f"保存失败: {e}", err=True)
             return
         st["dirty"] = False
         update_title()
-        stamp = datetime.now().astimezone().strftime("%H:%M:%S")
         enc_label = "ANSI" if enc == "gbk" else "UTF-8"
-        set_status(f"SAVED // {st['loaded_name']} [{enc_label}] @ {stamp}" +
-                   ("  ·  BACKUP" if bak else ""), ok=True)
+        # 成功态不显示文字 (仅图标定稿); 文案保留供将来 tooltip/日志用
+        set_status(f"已保存 {st['loaded_name']} [{enc_label}]" +
+                   (" (已备份)" if bak else ""), ok=True)
         # 0.86.5 Button 无 text 属性(只有 content), 改 content 才推送 UI (用户实测 2026-08)
         save_btn.content = "已保存"
         page.update()
@@ -667,24 +749,12 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             st["dirty"] = True
             update_title()
 
-    def _on_enc_change(e):
-        """编码分段按钮切换: 事件数据是选中值列表(单选模式取第一个)。
-        0.86.5 Dart 侧发 List; 兼容其它形态(裸字符串/JSON 字符串), 防御性解析 (L1)"""
-        data = e.data
-        if isinstance(data, str):
-            import json as _json
-            try:
-                parsed = _json.loads(data)
-                data = parsed if isinstance(parsed, (list, tuple)) else [parsed]
-            except ValueError:
-                data = [data]
-        sel = data if isinstance(data, (list, tuple)) else [str(data or "")]
-        if sel:
-            # 白名单校验: 只认 gbk/utf-8, 未知值保持原编码,
-            # 避免污染 st['enc'] 导致保存时抛 ValueError (L1)
-            v = str(sel[0])
-            if v in ("gbk", "utf-8"):
-                st["enc"] = v
+    def _on_enc_change(v):
+        """编码分段切换 (ui.enc_group 自绘, 直接传 value 字符串)。
+        白名单校验: 只认 gbk/utf-8, 未知值保持原编码, 避免污染 st['enc'] (L1)"""
+        if v in ("gbk", "utf-8"):
+            st["enc"] = v
+        page.update()
 
     # 当前编码(默认 gbk, 加载文件后随 source_encoding 更新)
     st["enc"] = "gbk"
@@ -699,15 +769,15 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
     def on_open_cfg(_=None):
         cfg = find_cfg_dir(st["csgo_dir"])
         if not cfg:
-            set_status("CFG DIR // 未定位", err=True)
+            set_status("未定位 cfg 文件夹", err=True)
             return
         try:
             os.startfile(cfg)
         except OSError as e:
             # 目录被删/权限受限时给出反馈, 而不是按钮静默无反应 (deep-review F8)
-            set_status(f"CFG DIR // 打开失败: {e}", err=True)
+            set_status(f"打开 cfg 文件夹失败: {e}", err=True)
             return
-        set_status(f"CFG DIR // {cfg}", ok=True)
+        set_status(f"已打开: {cfg}", ok=True)
 
     # save_btn 实际定义在 editor_head (2026-08 新设计: 保存移顶栏), on_click 在
     # 定义处接线 (on_save 已在此前定义, 见 editor_head 构建)
@@ -849,7 +919,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                     ft.Container(height=6),
                     ctrl,
                 ], tight=True, spacing=2),
-                bgcolor=COL_CARD, border_radius=8,
+                bgcolor=COL_CARD,  # 矩形 (2026-08 去圆角)
                 border=ft.Border(top=ft.BorderSide(1, COL_BORDER_SUBTLE),
                                  right=ft.BorderSide(1, COL_BORDER_SUBTLE),
                                  bottom=ft.BorderSide(1, COL_BORDER_SUBTLE),
@@ -902,6 +972,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             value="120", width=110, text_align=ft.TextAlign.CENTER,   # 数字居中 (用户指定 2026-08)
             label="执行超时(秒)", label_style=ft.TextStyle(size=11),
             border_color=INPUT_BORDER, focused_border_color=COL_BRAND, fill_color=INPUT_FILL,
+            border_radius=0,   # 方形 (2026-08 全 UI 去圆角)
         )
 
         def _parse_timeout() -> float:
@@ -916,7 +987,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             def run_tool_clicked(_=None):
                 d = st["csgo_dir"] or find_csgo_dir() or ""
                 if not d or (tool.file is not None and not os.path.isfile(os.path.join(d, tool.file))):
-                    set_status(f"TOOL // 未定位 {tool.file or tool.name}", err=True)
+                    set_status(f"未定位 {tool.file or tool.name}", err=True)
                     return
                 timeout = _parse_timeout()
                 def _run():
@@ -937,11 +1008,11 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                         if ok:
                             status_txt.value = "完成"
                             status_txt.color = COL_OK
-                            set_status(f"TOOL DONE // {tool.name}", ok=True)
+                            set_status(f"完成: {tool.name}", ok=True)
                         else:
                             status_txt.value = "失败"
                             status_txt.color = COL_ERR
-                            set_status(f"TOOL FAIL // {tool.name}: {output[:120]}", err=True)
+                            set_status(f"失败: {tool.name}: {output[:120]}", err=True)
                         page.update()
 
                     if not run_tool(d, tool, on_done=on_done, timeout=timeout):
@@ -951,7 +1022,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                             run_btn.set_busy(False),
                             setattr(status_txt, "value", "无法启动"),
                             setattr(status_txt, "color", COL_ERR),
-                            set_status(f"TOOL START FAIL // {tool.file or tool.name}", err=True),
+                            set_status(f"无法启动: {tool.file or tool.name}", err=True),
                             page.update()))
                 if st["dirty"]:
                     confirm_discard(_run, title="运行修复工具",
@@ -968,7 +1039,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 ft.Text("超过该秒数未结束将被强制终止, 防止脚本卡死/注册表修改悬空",
                         size=12, color=COL_TEXT_DIM, expand=True),
             ], spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            bgcolor=COL_CARD, border_radius=8,
+            bgcolor=COL_CARD,  # 矩形 (2026-08 去圆角)
             border=ft.Border(top=ft.BorderSide(1, COL_BORDER_SUBTLE),
                              right=ft.BorderSide(1, COL_BORDER_SUBTLE),
                              bottom=ft.BorderSide(1, COL_BORDER_SUBTLE),
@@ -994,7 +1065,8 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         for i in range(0, len(tool_cards), 2):
             pair = tool_cards[i:i + 2]
             if len(pair) == 1:
-                items.append(pair[0])
+                # 单卡也包 Row 约束宽度, 防撑满整行 (同 CFG 页单卡修复, 2026-08-23)
+                items.append(ft.Row([pair[0]], spacing=0))
             else:
                 items.append(ft.Row([
                     pair[0],
@@ -1002,14 +1074,241 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                     pair[1],
                 ], vertical_alignment=ft.CrossAxisAlignment.CENTER))
         items.append(ft.Container(
-            content=ft.Text("工具直接调用 CS:GO 目录下的官方维护脚本,运行结果以脚本输出为准。\n"
-                "修复 Steam 错误会修改当前用户的注册表(HKCU),请按需使用。", size=12, opacity=0.85),
+            # 风险告知精简 (2026-08 UI 审查): 删内部实现细节(调用官方脚本/输出),
+            # 只留对普通玩家有知情价值的注册表修改提示
+            content=ft.Text("修复工具会修改本机的 CS:GO 配置与系统注册表,请按需使用。",
+                            size=12, opacity=0.85),
             padding=ft.padding.Padding(left=0, top=8, right=0, bottom=0)))
         return ft.ListView(controls=items, padding=ft.padding.Padding(left=20, top=20, right=20, bottom=40), expand=True)
 
+    # -- CFG 配置页 (2026-08-22 定稿: 表单化编辑 s0up 预设, 见 docs/DESIGN.md CFG 配置) --
+    # 4 组 23 字段: 鼠标(auto.cfg)/准星(crosshair.cfg)/声音(auto.cfg)/性能(auto.cfg);
+    # 范围校验标红不保存; 保存前 .bak 备份; 独立 dirty; ProcName +exec 检测; 缺失一键植入
+    cfg_values: dict[str, str] = {}    # 命令名 -> 当前值 (页面快照)
+    cfg_vrs: dict[str, dict] = {}      # 命令名 -> {"v": str, "bad": bool}
+    cfg_missing: list[str] = []        # 缺失的预设文件
+
+    def _cfg_load():
+        """从 cfg 目录读取当前值 (打开页面/重新植入后调用)"""
+        cfg_values.clear()
+        cfg_vrs.clear()
+        cfg_missing.clear()
+        cfg_dir = find_cfg_dir(st["csgo_dir"])
+        if not cfg_dir or not os.path.isdir(cfg_dir):
+            cfg_missing.extend(["auto.cfg", "crosshair.cfg"])
+        else:
+            for fn in ("auto.cfg", "crosshair.cfg"):
+                p = os.path.join(cfg_dir, fn)
+                if os.path.isfile(p):
+                    for k, (v, _, _) in parse_cfg(p).items():
+                        f = FIELD_INDEX.get(k)
+                        if f and f.scale != 1.0:
+                            # 文件值 → 显示值 (透明度 255 → 100%)
+                            try:
+                                v = str(round(float(v) / f.scale))
+                            except ValueError:
+                                pass
+                        cfg_values[k] = v
+                else:
+                    cfg_missing.append(fn)
+        for _, fs, _ in GROUPS:
+            for f in fs:
+                dflt = str(f.default) if f.default is not None else ""
+                cfg_vrs[f.key] = {"v": cfg_values.get(f.key, dflt), "bad": False}
+
+    def _cfg_procname_has_exec() -> bool:
+        """rev.ini ProcName 是否已含 +exec auto.cfg (启动参数最后执行, 预设才真正生效)"""
+        if not st["csgo_dir"]:
+            return True
+        ini = os.path.join(st["csgo_dir"], "rev.ini")
+        if not os.path.isfile(ini):
+            return True
+        try:
+            with open(ini, "r", encoding="utf-8", errors="replace") as f:
+                txt = f.read()
+            m = re.search(r"(?im)^\s*ProcName\s*=.*$", txt)
+            return bool(m and "+exec auto.cfg" in m.group(0))
+        except OSError:
+            return True
+
+    def _cfg_add_exec(_=None):
+        """rev.ini ProcName 追加 +exec auto.cfg (备份后写回)"""
+        if not st["csgo_dir"]:
+            set_status("未定位游戏目录", err=True)
+            return
+        ini = os.path.join(st["csgo_dir"], "rev.ini")
+        if not os.path.isfile(ini):
+            set_status("未找到 rev.ini", err=True)
+            return
+        try:
+            with open(ini, "r", encoding="utf-8", errors="replace", newline="") as f:
+                txt = f.read()
+            m = re.search(r"(?im)^(\s*ProcName\s*=\s*)(.*)$", txt)
+            if not m:
+                set_status("rev.ini 无 ProcName 行", err=True)
+                return
+            if "+exec auto.cfg" in m.group(2):
+                set_status("启动参数已包含 +exec auto.cfg", ok=True)
+                return
+            bak = ini + ".bak_" + time.strftime("%Y%m%d%H%M%S")
+            shutil.copy2(ini, bak)
+            new_line = m.group(1) + m.group(2).rstrip() + " +exec auto.cfg\n"
+            txt = txt[:m.start()] + new_line + txt[m.end():]
+            with open(ini, "w", encoding="utf-8", newline="") as f:
+                f.write(txt)
+            set_status("已添加启动参数 +exec auto.cfg, 重启游戏生效", ok=True)
+        except OSError as exc:
+            set_status(f"添加失败: {exc}", err=True)
+
+    def _cfg_restore_preset(_=None):
+        """从随包 assets/s0up_preset 重新植入缺失的预设文件"""
+        src = _preset_src_dir()
+        cfg_dir = find_cfg_dir(st["csgo_dir"])
+        if not src or not os.path.isdir(src):
+            set_status("预设备份缺失, 无法重新植入", err=True)
+            return
+        if not cfg_dir or not os.path.isdir(cfg_dir):
+            set_status("未定位 CFG 目录", err=True)
+            return
+        n = 0
+        for fn in S0UP_FILES:
+            s = os.path.join(src, fn)
+            d = os.path.join(cfg_dir, fn)
+            if os.path.isfile(s) and not os.path.isfile(d):
+                shutil.copy2(s, d)
+                n += 1
+        if not n:
+            set_status("预设文件已齐全, 无需重新植入", ok=True)
+        else:
+            _cfg_load()
+            content_area.content = build_cfg_page()
+            page.update()
+            set_status(f"已重新植入 {n} 个预设文件", ok=True)
+
+    def _on_cfg_change(e, vr, field):
+        """CFG 字段输入: 范围校验标红 + 置 dirty (与 rev.ini 字段页同模式)"""
+        v = getattr(e.control, "value", "")
+        vr["v"] = "" if v is None else str(v)
+        ok, err = field.validate(vr["v"])
+        vr["bad"] = not ok
+        e.control.error_text = err if not ok else None
+        st["cfg_dirty"] = True
+        e.control.update()
+
+    def _save_cfg(_=None):
+        """保存 CFG: 校验 → .bak 备份 → 写回 → 提示 (dirty 清除)"""
+        bad = [k for k, vr in cfg_vrs.items() if vr["bad"]]
+        if bad:
+            set_status(f"{FIELD_INDEX[bad[0]].label} 超出范围, 无法保存", err=True)
+            return
+        cfg_dir = find_cfg_dir(st["csgo_dir"])
+        if not cfg_dir or not os.path.isdir(cfg_dir):
+            set_status("未定位 CFG 目录", err=True)
+            return
+        if cfg_missing:
+            set_status("预设文件缺失, 请先重新植入", err=True)
+            return
+        try:
+            for fn in ("auto.cfg", "crosshair.cfg"):
+                p = os.path.join(cfg_dir, fn)
+                if os.path.isfile(p):
+                    shutil.copy2(p, p + ".bak_" + time.strftime("%Y%m%d%H%M%S"))
+            updates = {k: vr["v"] for k, vr in cfg_vrs.items() if vr["v"] != ""}
+            apply_values(cfg_dir, updates)
+            st["cfg_dirty"] = False
+            # 临时提示 + 按钮文字反馈 (与 rev.ini 保存一致; 状态栏 ok 分支仅图标, 2026-08)
+            _flash_status("已保存, 重启游戏生效")
+            save_btn.content = "已保存"
+            page.update()
+            threading.Timer(1.5, lambda: page.run_thread(
+                lambda: (setattr(save_btn, 'content', '保存'), page.update()))).start()
+        except OSError as exc:
+            set_status(f"保存失败: {exc}", err=True)
+
+    def build_cfg_page():
+        """构建 CFG 配置页: 顶部说明 + 提示条(ProcName/缺失) + 4 组表单卡片"""
+        _cfg_load()
+        items: list[ft.Control] = []
+        # 顶部说明 (2026-08-23 用户指定: 从页底移到最上面, 进入即见适用范围)
+        items.append(ft.Container(
+            content=ft.Text("修改会写入 s0up 预设 (auto.cfg / crosshair.cfg), 保存前自动备份。",
+                            size=12, opacity=0.85),
+            padding=ft.padding.Padding(left=0, top=2, right=0, bottom=8)))
+        # 提示条 1: 启动参数缺 +exec auto.cfg (预设被 config.cfg 覆盖, 2026-08 拷问 F2)
+        if not _cfg_procname_has_exec():
+            items.append(ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.WARNING_AMBER, size=16, color=COL_WARN),
+                    ft.Text("启动参数缺少 +exec auto.cfg, 预设可能被游戏配置覆盖", size=12,
+                            color=COL_TEXT_PRIMARY, expand=True),
+                    ft.OutlinedButton(
+                        "一键添加", on_click=_cfg_add_exec, height=28,
+                        style=ft.ButtonStyle(
+                            bgcolor=COL_BRAND, color=ft.Colors.WHITE,
+                            shape=ft.RoundedRectangleBorder(radius=0))),
+                ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                bgcolor=COL_WARN_BG, border=ft.Border.all(1, COL_WARN),
+                padding=ft.padding.Padding(left=12, top=8, right=8, bottom=8)))
+        # 提示条 2: 预设文件缺失
+        if cfg_missing:
+            items.append(ft.Container(
+                content=ft.Row([
+                    ft.Icon(ft.Icons.ERROR_OUTLINE, size=16, color=COL_ERR),
+                    ft.Text(f"预设文件缺失: {'、'.join(cfg_missing)}, 可重新植入", size=12,
+                            color=COL_TEXT_PRIMARY, expand=True),
+                    ft.OutlinedButton(
+                        "重新植入", on_click=_cfg_restore_preset, height=28,
+                        style=ft.ButtonStyle(
+                            bgcolor=COL_BRAND, color=ft.Colors.WHITE,
+                            shape=ft.RoundedRectangleBorder(radius=0))),
+                ], spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                bgcolor=COL_ERR_BG, border=ft.Border.all(1, COL_ERR),
+                padding=ft.padding.Padding(left=12, top=8, right=8, bottom=8)))
+        # 4 组表单卡片 (2026-08-23 显示优化: 全部控件高 64px + desc 18px 等高,
+        # 所有卡片结构完全一致 → 双列整齐; RGB 合并撤销 — 并排小框高度不齐)
+        for gn, fields, _ in GROUPS:
+            cards = []
+            for f in fields:
+                vr = cfg_vrs[f.key]
+                if f.kind == "enum":
+                    opts = [ft.dropdown.Option(key=str(v), text=t) for v, t in f.options]
+                    ctrl = ui.select_dark(
+                        opts, selected=vr["v"], width=236, height=64,
+                        filled=True, fill_color=INPUT_FILL, border_color=INPUT_BORDER,
+                        on_select=lambda e, vr=vr, f=f: _on_cfg_change(e, vr, f))
+                else:
+                    # 数字字段等宽字体 + 显式 64px 高 (与下拉一致, 卡片等高)
+                    ctrl = ui.input_dark(
+                        vr["v"], width=236, height=64, mono=True,
+                        placeholder=str(f.default) if f.default is not None else "",
+                        on_change=lambda e, vr=vr, f=f: _on_cfg_change(e, vr, f))
+                # desc_lines=1 强制说明行等高, 双列卡片高度对齐
+                cards.append(ui.config_card(f.label, f.unit, ctrl,
+                                            title_expand=True, desc_lines=1))
+            # 组标题 (15px/700 与卡片标题 14px 拉开层级, 2026-08-23 显示优化)
+            items.append(ft.Container(
+                content=ft.Text(gn, size=15, weight=ft.FontWeight.W_700,
+                                color=COL_TEXT_SECONDARY),
+                padding=ft.padding.Padding(left=0, top=18, bottom=6)))
+            # 双列 (2 张一行, 同字段页 field-grid); 奇数行最后一张单卡也包 Row
+            # 约束内容宽度 — 直接 append 会撑满整行 648px (准星透明度卡巨宽, 用户反馈 2026-08-23)
+            for i in range(0, len(cards), 2):
+                pair = cards[i:i + 2]
+                if len(pair) == 1:
+                    items.append(ft.Row([pair[0]], spacing=0))
+                else:
+                    items.append(ft.Row([pair[0], ft.Container(width=10), pair[1]],
+                                        vertical_alignment=ft.CrossAxisAlignment.CENTER))
+        return ft.ListView(controls=items,
+                           padding=ft.padding.Padding(left=20, top=20, right=20, bottom=40),
+                           expand=True)
+
     # -- 导航 --
     nav_content = []
-    icon_map = {"tune": ft.Icons.TUNE, "play": ft.Icons.PLAY_ARROW, "wrench": ft.Icons.BUILD}
+    # CFG 配置页在 FIELD_GROUPS 中的索引 (保存按钮语义切换用)
+    CFG_NAV_INDEX = next((i for i, g in enumerate(FIELD_GROUPS) if g.get("type") == "cfg"), -1)
+    icon_map = {"tune": ft.Icons.TUNE, "play": ft.Icons.PLAY_ARROW,
+                "wrench": ft.Icons.BUILD, "cfg": ft.Icons.DESCRIPTION}
     nav_items = []
     for i, g in enumerate(FIELD_GROUPS):
         icon = icon_map.get(g.get("icon_key", "wrench"), ft.Icons.BUILD)
@@ -1017,14 +1316,32 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             icon=ft.Icon(icon, color=COL_TEXT_DIM),
             selected_icon=ft.Icon(icon, color=COL_BRAND_SOFT),
             label=ft.Text(g["title"], size=12)))
-        nav_content.append(build_tools_page(g) if g.get("type") == "tools" else build_page(g))
+        if g.get("type") == "cfg":
+            nav_content.append(build_cfg_page())
+        elif g.get("type") == "tools":
+            nav_content.append(build_tools_page(g))
+        else:
+            nav_content.append(build_page(g))
     content_area.content = nav_content[0]
 
     def on_nav_change(e):
         nonlocal nav_index
-        nav_index = e.control.selected_index
-        content_area.content = nav_content[nav_index]
-        page.update()
+        target = e.control.selected_index
+        if target == nav_index:
+            return
+        # 离开 CFG 页且 CFG 有未保存修改: 拦截确认 (CFG 独立 dirty, 2026-08 定稿 Q5)
+        def _switch():
+            nonlocal nav_index
+            nav_index = target
+            content_area.content = nav_content[nav_index]
+            # 顶栏保存按钮语义随页切换: CFG 页保存 CFG, 其他页保存 rev.ini
+            save_btn.on_click = _save_cfg if nav_index == CFG_NAV_INDEX else on_save
+            page.update()
+        if nav_index == CFG_NAV_INDEX and st["cfg_dirty"]:
+            confirm_discard(_switch, title="切换页面",
+                            message="CFG 配置尚未保存, 切换将丢弃这些修改。")
+        else:
+            _switch()
 
     def start_drag(_=None):
         asyncio.create_task(page.window.start_dragging())
@@ -1048,7 +1365,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             page.update()
             asyncio.create_task(page.window.destroy())
 
-        if st["dirty"]:
+        if st["dirty"] or st["cfg_dirty"]:
             confirm_discard(_do_close, title="关闭窗口",
                             message="配置尚未保存, 关闭将丢失这些修改。")
         else:
@@ -1068,6 +1385,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             # (实测 avatar.dat 235×315 撑破布局, 盖住昵称/头衔/胶囊)
             avatar.content = ft.Image(src=src, width=AVATAR_D, height=AVATAR_D,
                                       fit=ft.BoxFit.COVER,
+                                      filter_quality=ft.FilterQuality.HIGH,  # 低清 avatar.dat 缩放平滑 (2026-08 UI 审查)
                                       border_radius=AVATAR_D // 2)
         else:
             avatar.content = ft.Text((nick or "汤")[:1], size=FONT_36,
@@ -1335,8 +1653,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
     card = ft.Container(
         width=CARD_W,
         bgcolor=COL_CARD,
-        border_radius=24,
-        # 阴影 (SHADOW_CARD, theme.py): 纯黑融入深底无色相
+        # 矩形 (2026-08 用户决策去圆角: 主页大卡 24px 圆角最显眼)
         shadow=SHADOW_CARD,
         padding=ft.padding.Padding(top=28, left=36, right=36, bottom=30),
         content=ft.Column([
@@ -1401,6 +1718,12 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         status_bar.visible = True
         page.window.focused = True   # 主动聚焦: 否则返回/保存等按钮首次点击被焦点吞掉 (2026-08)
         page.update()
+        # 调试开关: REVINI_START_VIEW=cfg 启动直接落在 CFG 配置页 (验证用, 平时不设)
+        if os.environ.get("REVINI_START_VIEW") == "cfg":
+            nav_rail.selected_index = CFG_NAV_INDEX
+            content_area.content = nav_content[CFG_NAV_INDEX]
+            save_btn.on_click = _save_cfg
+            page.update()
 
     def on_back_to_launcher(_=None):
         def _go():
@@ -1415,15 +1738,19 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 else:
                     # 文件被外部删除: 保留内存 model (原始配置还在), 仅清 dirty (R5)
                     st["dirty"] = False
-                    set_status("返回 // 文件已被删除, 内存配置保留, 保存将重建文件", err=True)
+                    set_status("文件已被删除,内存配置保留,保存将重建文件", err=True)
             else:
                 # 无文件(默认模板场景): 重置为干净的默认模板
                 model = RevIni.from_text(default_ini_text())
                 populate_all()
                 st["dirty"] = False
+            # CFG 页独立 dirty 一并丢弃: 清标记 + 重建页面 (下次进入重新读盘, 2026-08 定稿 Q5)
+            st["cfg_dirty"] = False
+            if CFG_NAV_INDEX >= 0:
+                nav_content[CFG_NAV_INDEX] = build_cfg_page()
             show_launcher()               # 先切回主页卡(宽屏中居中显示)
             _animate_window(*WIN_HOME)    # 再收拢窗口包住卡片
-        if st["dirty"]:
+        if st["dirty"] or st["cfg_dirty"]:
             confirm_discard(_go, title="返回启动台",
                             message="配置尚未保存, 返回将丢弃这些修改。")
         else:
@@ -1504,7 +1831,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                         m = RevIni.load(auto)
                 except OSError as e:
                     # 先取出消息再进 lambda: 避免闭包延迟绑定 except 变量 (F841)
-                    err_msg = f"LOAD ERROR // {e}"
+                    err_msg = f"加载失败: {e}"
                     # 失败路径与「未找到」路径收敛到同一兜底: 载入默认模板。
                     # 只解互斥不建模板会让 model 留 None → 编辑页空表单,
                     # 点保存 model.save() 抛未捕获 AttributeError (deep-review 7轮 F2)
@@ -1542,23 +1869,34 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         home_win_controls,
     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
+    # -- 编辑页顶栏按钮 (design-system.md #10 BarButton, HTML .btn-bar):
+    # 低调灰底细边框 34px; 保存为 primary 变体主色实心 (主操作突出, 2026-08 UI 审查落地)
+    def _bar_btn(text, icon, on_click):
+        return ft.OutlinedButton(
+            text, icon=icon, on_click=on_click, height=34,
+            style=ft.ButtonStyle(
+                bgcolor={"": COL_BG_GHOST_2, "hovered": COL_BTN_BAR_HOVER},
+                color=COL_TEXT_SECONDARY,
+                side={"": ft.BorderSide(1, COL_BORDER_SUBTLE),
+                      "hovered": ft.BorderSide(1, COL_BORDER_VISIBLE)},
+                shape=ft.RoundedRectangleBorder(radius=0),  # 矩形 (2026-08 去圆角)
+                text_style=ft.TextStyle(size=12, weight=ft.FontWeight.W_500),
+            ),
+        )
+
     # 编辑页: ← 返回 + 文件按钮(左) + 保存 + 窗口控制(右)
     # 保存按钮移到顶栏左侧主按钮位 (design-system.md #10: BarButton primary 变体)
-    save_btn = ft.FilledButton("保存", icon=ft.Icons.SAVE, on_click=on_save,
+    save_btn = ft.FilledButton("保存", icon=ft.Icons.SAVE, on_click=on_save, height=34,
         style=ft.ButtonStyle(bgcolor=COL_BRAND, color=ft.Colors.WHITE,
-                             shape=ft.RoundedRectangleBorder(radius=8)))
+                             shape=ft.RoundedRectangleBorder(radius=0)))  # 矩形 (2026-08 去圆角)
     editor_head = ft.Row([
         ft.Row([
-            ft.OutlinedButton("返回", icon=ft.Icons.ARROW_BACK, on_click=on_back_to_launcher,
-                              style=ft.ButtonStyle(side=ft.BorderSide(1, COL_BRAND))),
-            ft.Container(width=1, height=26, bgcolor=ft.Colors.OUTLINE_VARIANT),
-            ft.OutlinedButton("打开 cfg 文件夹", icon=ft.Icons.FOLDER_OPEN, on_click=on_open_cfg,
-                              style=ft.ButtonStyle(side=ft.BorderSide(1, COL_BRAND))),
-            ft.OutlinedButton("指定目录", icon=ft.Icons.FOLDER, on_click=on_pick_dir,
-                              style=ft.ButtonStyle(side=ft.BorderSide(1, COL_BRAND))),
-            ft.OutlinedButton("打开文件", icon=ft.Icons.FILE_OPEN, on_click=on_open_file,
-                              style=ft.ButtonStyle(side=ft.BorderSide(1, COL_BRAND))),
-            ft.Container(width=1, height=26, bgcolor=ft.Colors.OUTLINE_VARIANT),
+            _bar_btn("返回", ft.Icons.ARROW_BACK, on_back_to_launcher),
+            ft.Container(width=1, height=26, bgcolor=COL_BORDER_SUBTLE),
+            _bar_btn("打开 cfg 文件夹", ft.Icons.FOLDER_OPEN, on_open_cfg),
+            _bar_btn("指定目录", ft.Icons.FOLDER, on_pick_dir),
+            _bar_btn("打开文件", ft.Icons.FILE_OPEN, on_open_file),
+            ft.Container(width=1, height=26, bgcolor=COL_BORDER_SUBTLE),
             save_btn,
         ], spacing=10),
         win_controls,
@@ -1566,8 +1904,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
 
     title_bar = ft.Container(
         content=launcher_head,
-        padding=ft.padding.Padding(left=16, top=9, right=16, bottom=9),
-        height=64,
+        # h=56: HTML 事实源 .titlebar 56px (2026-08 UI 审查对齐; padding 8 上下容纳 40px 窗口按钮)
+        padding=ft.padding.Padding(left=16, top=8, right=16, bottom=8),
+        height=56,
         on_tap_down=start_drag)
 
     # -- 导航栏 --
@@ -1576,12 +1915,16 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
     # 教训: 手动 height=624 撑出上下大空白 + group_alignment 使项间距被拉伸不均;
     # expand=True 在 Row 里拉的是横向(rail 变整行空白, 导航项居中浮空) (2026-08 用户反馈)
     nav_rail = ft.NavigationRail(selected_index=0, label_type=ft.NavigationRailLabelType.ALL,
-        min_width=88, min_extended_width=88,
+        # w=96: HTML 事实源 .sidebar 96px (2026-08 UI 审查对齐)
+        min_width=96, min_extended_width=96,
         destinations=nav_items, on_change=on_nav_change,
         bgcolor=COL_BG, group_alignment=-1.0,   # 显式最顶: 消除剩余顶部 padding (2026-08)
-        # 选中态 = 图标/文字变品牌柔色 (design-system.md #11, HTML 无背景胶囊);
-        # indicator 必须透明 — 实心胶囊会盖住图标 SVG (用户反馈 2026-08)
-        indicator_color=ft.Colors.TRANSPARENT,
+        # 选中态 = 半透明品牌底 (10%) + 图标/文字变品牌柔色 (design-system #11,
+        # HTML 激活项 bg 10% + 左 3px 指示条; 指示条 NavigationRail 无法表达, 用
+        # 半透明 indicator 圆角 8px 近似——实心 indicator 会盖住图标 (用户反馈 2026-08),
+        # 10% 半透明只提亮背景不遮图标)
+        indicator_color=COL_BRAND_BG_10,
+        indicator_shape=ft.RoundedRectangleBorder(radius=0),  # 矩形 (2026-08 去圆角)
         selected_label_text_style=ft.TextStyle(color=COL_BRAND_SOFT, size=12, weight=ft.FontWeight.W_600),
         unselected_label_text_style=ft.TextStyle(color=COL_TEXT_DIM, size=12))
 
@@ -1594,7 +1937,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
 
     # -- 状态栏 (仅图标 + 编码切换; 常驻文字/时间戳已删 — design-system.md #26)
     # 组件库实现 (rules.md §1: 禁止页面内联伪组件, deep-review 5轮 MEDIUM-5)
-    status_bar = ui.status_bar(enc_selector, status_msg)
+    status_bar = ui.status_bar(enc_selector, status_msg, status_icon)
 
     # -- 视图容器 (AnimatedSwitcher 内容过渡, 方案 B) --
     # 2026-08 重大修复: transition=SCALE + scale=0.9 时内容以 0.9 缩放切入
@@ -1620,14 +1963,19 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         bgcolor=COL_BG,
         # 无描边: 描边 #2A2730 在透明窗口左/下边缘渲染成橄榄色
         # (用户截图+PrintWindow 双重证实, 2026-08); 移除后边缘干净
-        border_radius=ft.border_radius.BorderRadius(top_left=12, top_right=12, bottom_left=12, bottom_right=12),
+        # 矩形边缘 (2026-08 用户决策): 放弃圆角 — Flutter Windows 圆角窗口
+        # 四角黑边问题无法可靠解决, 改矩形彻底消除
         clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
         expand=True,
     ))
 
     # -- 初始加载: 直接进主页 (rev.ini 定位在主页 lazy 完成) --
     refresh_dir()
-    show_launcher()
+    if os.environ.get("REVINI_START_VIEW") == "cfg":
+        # 调试: 启动直接进编辑页 CFG 配置 (2026-08 验证用, 平时不设)
+        enter_editor()
+    else:
+        show_launcher()
 
     # 修复: 部分环境下 frameless 窗口以最小化/不可见状态启动, 主动恢复。
     # 实测: left/top 字段推送定位可靠; center()(挪到 124,134)与

@@ -4,8 +4,11 @@
 # 干扰: 首次运行或位于新目录时, 杀软(卡巴斯基/360/火绒等)会逐文件扫描 exe+引擎组件
 #       (约 150MB, 见 packaging/README_分发版.md), 单次结果波动大 — 应重复多次取 min/中位数。
 # 用法: python measure_startup.py [exe路径] [工作目录]   (默认值见下)
-import subprocess, time, ctypes, sys
+import ctypes
 import ctypes.wintypes
+import subprocess
+import sys
+import time
 
 EXE = r"D:\re-la\revini-editor\build\nuitka\main.dist\RevIniEditor.exe"
 CWD = r"D:\re-la\revini-editor\build\nuitka\main.dist"
@@ -101,12 +104,12 @@ while time.perf_counter() < t_end:
     def cb(h, _):
         pid = ctypes.wintypes.DWORD()
         user32.GetWindowThreadProcessId(h, ctypes.byref(pid))
-        if pid.value in newf and user32.IsWindowVisible(h):
+        if pid.value in newf and user32.IsWindowVisible(h):  # noqa: B023 - 同步回调, 循环内立即消费当前 newf
             buf = ctypes.create_unicode_buffer(256)
             user32.GetWindowTextW(h, buf, 256)
             t = buf.value
             if t and ("Rev.Ini" in t or "汤圆" in t or "CS:GO" in t):
-                found[0] = (h, t)
+                found[0] = (h, t)  # noqa: B023 - 同步回调, 循环内立即消费当前 found
                 return False  # 命中目标, 停止枚举
         return True
 
@@ -124,7 +127,7 @@ print(f"引擎窗口可见: {t_vis if t_vis is not None else '未见'}s  title={
 if p.poll() is None:
     try:
         p.terminate()
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - 测试进程清理兜底, 失败静默
         pass
     time.sleep(0.5)
 cleanup_new_pids(before)

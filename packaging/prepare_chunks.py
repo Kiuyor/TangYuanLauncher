@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -43,6 +44,70 @@ FILE_REPLACEMENTS = [
     ("platform\\items_730.bin", EXT_ITEMS_BIN,
      "0cfbf18a567f2ab1df95669102198096"),
 ]
+
+# ---------- 默认集合进游戏文件的植入项 (2026-08-22 用户指定: 装完即玩) ----------
+
+# s0up CFG 预设 (V1.7, Purp1e 制作) → csgo/cfg/ (玩家主战场, auto.cfg 为主文件)
+# 源 = 仓库 assets/s0up_preset/ (已提交 git; 原 Downloads 外部路径不可移植, 2026-08-22 迁入)
+S0UP_PRESET_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                               "assets", "s0up_preset")
+# 文件清单单一事实源: app/cfg_fields.py (运行时 CFG 页共用)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from app.cfg_fields import S0UP_FILES
+
+# autoexec.cfg 桥接: CS:GO 启动自动执行 autoexec.cfg → exec auto.cfg 加载预设。
+# str → encode("utf-8") 写法 (skill: bytes literal 内嵌中文转义会静默失败)
+AUTOEXEC_BRIDGE = (
+    "// TangYuan Launcher: load s0up preset\n"
+    "// 汤圆启动器：自动加载 s0up 预设\nexec auto.cfg\n").encode()
+
+# 优化 Loader (并存 newloader.exe, 原版 Loader.exe 不动 — 与 _install_loader 同源同策略)
+NEWLOADER_SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                             "assets", "Loader_opt23.exe")
+
+
+def _file_md5(path: str) -> str:
+    with open(path, "rb") as f:
+        return hashlib.md5(f.read()).hexdigest()
+
+
+def copy_into(game_dir: str, rel: str, src: str) -> bool:
+    """植入文件 (幂等 md5): 目标不存在→复制; 存在且 md5 一致→跳过;
+    存在但内容不同→备份 .bak_<ts> 后覆盖 (尊重已修改内容的可追溯)。返回是否改动。"""
+    p = os.path.join(game_dir, rel)
+    if not os.path.isfile(src):
+        print(f"  [warn] 源缺失 {src}, 跳过 {rel}")
+        return False
+    src_md5 = _file_md5(src)
+    if os.path.isfile(p):
+        if _file_md5(p) == src_md5:
+            print(f"  [skip] {rel}: 已是最新")
+            return False
+        bak = p + ".bak_" + time.strftime("%Y%m%d%H%M%S")
+        shutil.copy2(p, bak)
+        print(f"  [backup] {rel} 内容不同 -> {os.path.basename(bak)}")
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    shutil.copy2(src, p)
+    print(f"  [copy] {rel} (植入)")
+    return True
+
+
+def ensure_autoexec_bridge(game_dir: str) -> bool:
+    """确保 csgo/cfg/autoexec.cfg 为桥接内容 (exec auto.cfg)。幂等 + 备份保护。"""
+    p = os.path.join(game_dir, "csgo", "cfg", "autoexec.cfg")
+    if os.path.isfile(p):
+        with open(p, "rb") as f:
+            if f.read() == AUTOEXEC_BRIDGE:
+                print("  [skip] csgo/cfg/autoexec.cfg: 已是最新")
+                return False
+        bak = p + ".bak_" + time.strftime("%Y%m%d%H%M%S")
+        shutil.copy2(p, bak)
+        print(f"  [backup] autoexec.cfg 内容不同 -> {os.path.basename(bak)}")
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "wb") as f:
+        f.write(AUTOEXEC_BRIDGE)
+    print("  [copy] csgo/cfg/autoexec.cfg (桥接 exec auto.cfg)")
+    return True
 
 
 def _marker_line_present(data: bytes, marker: bytes) -> bool:
@@ -223,6 +288,15 @@ def main() -> None:
         apply_patch(game_dir, rel, old, new, marker)
     for rel, src, md5 in FILE_REPLACEMENTS:
         apply_file_replacement(game_dir, rel, src, md5)
+    # 默认集合植入 (2026-08-22 用户指定: s0up 预设 / 优化 Loader / 皮肤补全装完即玩)
+    if os.path.isdir(S0UP_PRESET_DIR):
+        for f in S0UP_FILES:
+            copy_into(game_dir, os.path.join("csgo", "cfg", f),
+                      os.path.join(S0UP_PRESET_DIR, f))
+        ensure_autoexec_bridge(game_dir)
+    else:
+        print(f"  [warn] s0up 预设源目录不存在: {S0UP_PRESET_DIR}")
+    copy_into(game_dir, "newloader.exe", NEWLOADER_SRC)
     print("== 2/3 收集文件清单")
     files = collect_files(game_dir)
     total = sum(s for _, s in files)

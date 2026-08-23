@@ -212,8 +212,8 @@ FIELD_GROUPS = [
         "fields": [
             textarea_field("Loader", "ProcName", "启动命令",
                            "游戏启动参数,每个参数一行,保存时自动合并为一行。点击下方推荐项即可一键添加",
-                           "csgo.exe -steam -silent -high +sv_lan 1",
-                           "csgo.exe -steam -silent -high +sv_lan 1",
+                           "csgo.exe -steam -silent -high +sv_lan 1 +exec auto.cfg",
+                           "csgo.exe -steam -silent -high +sv_lan 1 +exec auto.cfg",
                            chips=[
                                {"args": "-high", "label": "-high",
                                 "tip": "提高 CS:GO 进程优先级"},
@@ -234,5 +234,11 @@ FIELD_GROUPS = [
             "icon_key": "wrench",
             "desc": "一键运行 CS:GO 内置维护脚本:清缓存、修复 Steam 错误",
             "type": "tools",
+        },
+    {
+            "title": "CFG 配置",
+            "icon_key": "cfg",
+            "desc": "表单化编辑 s0up 预设 (auto.cfg / crosshair.cfg): 灵敏度/准星/音量/性能",
+            "type": "cfg",
         },
     ]
