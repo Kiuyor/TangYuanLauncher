@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -47,6 +48,10 @@ class CfgField:
             return False, "需为数字"
         if self.kind == "int" and raw.strip() != str(int(raw)):
             return False, "需为整数"
+        if not math.isfinite(v):
+            # NaN/±inf: 与 min/max 比较恒 False 会绕过范围检查, 必须显式拦截
+            # (deep-review 12轮: float("nan") 不抛 ValueError, 会写 sensitivity nan 进 cfg)
+            return False, "需为数字"
         if self.min_v is not None and v < self.min_v:
             return False, f"最小 {self.min_v}"
         if self.max_v is not None and v > self.max_v:
@@ -119,8 +124,6 @@ FIELD_INDEX = {f.key: f for _, fs, _ in GROUPS for f in fs}
 
 # 行结构: 缩进 + 命令名 + 分隔空白 + 值(可带引号) + 行尾注释(//...)
 _LINE_RE = re.compile(r"^(\s*)([a-zA-Z_][a-zA-Z_0-9]*)(\s+)(.*)$")
-# 组标题: //═...    N. 组名    ═...  (auto.cfg 分节定位用)
-_GROUP_HEAD_RE = re.compile(r"//[═＝=].*\d\.\s*(鼠标设置|准星|声音|HUD|基础|视频|键位|买枪)")
 
 
 def parse_cfg(path: str) -> dict[str, tuple[str, str, int]]:
@@ -164,7 +167,7 @@ _GROUP_TITLE_KEYWORDS = {
     "声音": ("声音设置",),
     "性能": ("基础设置",),       # fps/r_dynamic 在预设"6. 基础设置"节
 }
-_GROUP_HEAD_RE = re.compile(r"//[═＝=].*\d\.\s*([^═＝=\s][^═＝=]*?)")
+_GROUP_HEAD_RE = re.compile(r"//[═＝=].*\d\.\s*([^═＝=\s]+)")
 
 
 def _group_head_line(lines: list[str], group_name: str) -> int:
@@ -195,21 +198,16 @@ def _fmt_value(field: CfgField, raw: str) -> str:
 def apply_values(cfg_dir: str, updates: dict[str, str]) -> dict[str, str]:
     """将更新写回 auto.cfg / crosshair.cfg。
 
-    updates: {命令名: 新值字符串} (已通过范围校验)。
-    写回保留原行缩进/分隔空格/行尾注释; 命令缺失时追加到组标题后。
+    updates: {命令名: 文件值字符串} (已换算为最终文件值, 含 scale 字段, 如透明度 255)。
+    写回保留原行缩进/分隔空格/行尾注释; 命令缺失时按组追加到对应组标题后。
     返回 {文件路径: 修改的行数} (调用方负责 .bak 备份与 dirty 管理)。
     """
     changed: dict[str, str] = {}
-    # 按文件分组 (updates 副本, 不污染调用方; scale 字段换算回文件值, 如透明度 100→255)
+    # 按文件分组 (updates 已是文件值, 不再在此做 scale 换算——
+    # scale 换算移到 UI 层, 以便用原始文件值精确判断「未修改」防 round 往返丢精度)
     by_file: dict[str, dict[str, str]] = {}
     for key, val in updates.items():
         f = FIELD_INDEX[key]
-        if f.scale != 1.0:
-            try:
-                # +1e-9: 浮点误差修正 (50*2.55=127.49999... 会舍成 127)
-                val = str(round(float(val) * f.scale + 1e-9))
-            except ValueError:
-                pass
         by_file.setdefault(f.file, {})[key] = val
 
     for file_name, upd in by_file.items():
@@ -238,17 +236,22 @@ def apply_values(cfg_dir: str, updates: dict[str, str]) -> dict[str, str]:
                 lines[ln] = new_line
                 n_changed += 1
             remaining.pop(key, None)
-        # 缺失命令: 追加到组标题后 (auto.cfg) / 文件尾 (crosshair.cfg)
+        # 缺失命令: 按所属组分组, 各自追加到对应组标题后 (crosshair.cfg 无分节走文件尾)
+        # (deep-review 12轮: 原实现用第一个缺失命令的组名代理全部, 跨组缺失时错位)
         if remaining:
-            group_name = "准星" if file_name == "crosshair.cfg" else \
-                _GROUP_OF.get(next(iter(remaining)), "性能")
-            anchor = _group_head_line(lines, group_name)
-            inserts = []
+            by_group: dict[str, list[tuple[str, str]]] = {}
             for key, val in remaining.items():
-                field = FIELD_INDEX[key]
-                inserts.append(f"{key} {_fmt_value(field, val)}  // 由汤圆启动器添加{eol}")
-            lines[anchor:anchor] = inserts
-            n_changed += len(inserts)
+                by_group.setdefault(_GROUP_OF.get(key, "性能"), []).append((key, val))
+            insertions: list[tuple[int, list[str]]] = []
+            for gn, items in by_group.items():
+                anchor = _group_head_line(lines, gn)
+                insertions.append((anchor, [
+                    f"{key} {_fmt_value(FIELD_INDEX[key], val)}  // 由汤圆启动器添加{eol}"
+                    for key, val in items]))
+            # 从后往前插, 避免行号偏移
+            for anchor, ins_lines in sorted(insertions, key=lambda x: -x[0]):
+                lines[anchor:anchor] = ins_lines
+                n_changed += len(ins_lines)
         with open(path, "w", encoding="utf-8", newline="") as f:
             f.writelines(lines)
         changed[path] = str(n_changed)

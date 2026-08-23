@@ -1,11 +1,11 @@
 @echo off
 rem ============================================================
-rem  TangYuan Launcher v2.2.3 release build pipeline (bundled game)
+rem  TangYuan Launcher v2.2.4 release build pipeline (bundled game)
 rem  1) game patches + chunk compression (prepare_chunks.py)
 rem  2) copy 7z runtime (used by installer to extract)
 rem  3) Nuitka build launcher (build_nuitka.bat)
 rem  4) Inno Setup packaging (installer.iss)
-rem  Output: dist\TangYuanLauncher-Setup-2.2.3.exe
+rem  Output: dist\TangYuanLauncher-Setup-2.2.4.exe
 rem ============================================================
 setlocal
 cd /d "%~dp0\.."
@@ -28,5 +28,5 @@ echo [4/5] Inno Setup packaging...
 "%ISCC%" packaging\installer.iss
 if errorlevel 1 ( echo [ERROR] ISCC failed & exit /b 1 )
 
-echo [5/5] done: dist\TangYuanLauncher-Setup-2.2.3.exe
+echo [5/5] done: dist\TangYuanLauncher-Setup-2.2.4.exe
 endlocal

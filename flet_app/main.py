@@ -1084,15 +1084,17 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
     # -- CFG 配置页 (2026-08-22 定稿: 表单化编辑 s0up 预设, 见 docs/DESIGN.md CFG 配置) --
     # 4 组 23 字段: 鼠标(auto.cfg)/准星(crosshair.cfg)/声音(auto.cfg)/性能(auto.cfg);
     # 范围校验标红不保存; 保存前 .bak 备份; 独立 dirty; ProcName +exec 检测; 缺失一键植入
-    cfg_values: dict[str, str] = {}    # 命令名 -> 当前值 (页面快照)
-    cfg_vrs: dict[str, dict] = {}      # 命令名 -> {"v": str, "bad": bool}
-    cfg_missing: list[str] = []        # 缺失的预设文件
+    cfg_values: dict[str, str] = {}       # 命令名 -> 当前显示值 (页面快照)
+    cfg_vrs: dict[str, dict] = {}         # 命令名 -> {"v": str, "bad": bool}
+    cfg_missing: list[str] = []           # 缺失的预设文件
+    cfg_file_values: dict[str, str] = {}  # scale 字段的原始文件值 (防 round 往返丢精度)
 
     def _cfg_load():
         """从 cfg 目录读取当前值 (打开页面/重新植入后调用)"""
         cfg_values.clear()
         cfg_vrs.clear()
         cfg_missing.clear()
+        cfg_file_values.clear()
         cfg_dir = find_cfg_dir(st["csgo_dir"])
         if not cfg_dir or not os.path.isdir(cfg_dir):
             cfg_missing.extend(["auto.cfg", "crosshair.cfg"])
@@ -1103,6 +1105,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                     for k, (v, _, _) in parse_cfg(p).items():
                         f = FIELD_INDEX.get(k)
                         if f and f.scale != 1.0:
+                            cfg_file_values[k] = v   # 原始文件值 (如 "255")
                             # 文件值 → 显示值 (透明度 255 → 100%)
                             try:
                                 v = str(round(float(v) / f.scale))
@@ -1132,7 +1135,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             return True
 
     def _cfg_add_exec(_=None):
-        """rev.ini ProcName 追加 +exec auto.cfg (备份后写回)"""
+        """rev.ini ProcName 追加 +exec auto.cfg (备份后写回, 字节级保留 CRLF)"""
         if not st["csgo_dir"]:
             set_status("未定位游戏目录", err=True)
             return
@@ -1141,21 +1144,31 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             set_status("未找到 rev.ini", err=True)
             return
         try:
-            with open(ini, "r", encoding="utf-8", errors="replace", newline="") as f:
-                txt = f.read()
-            m = re.search(r"(?im)^(\s*ProcName\s*=\s*)(.*)$", txt)
-            if not m:
+            with open(ini, "rb") as f:
+                data = f.read()
+            # 字节级: bytes([13])/bytes([10]) 代替反斜杠r/反斜杠n字面量 (CRLF 文件字节替换会吞反斜杠r)
+            lines = data.split(bytes([10]))
+            idx = None
+            for i, ln in enumerate(lines):
+                s = ln.lstrip()
+                if s.lower().startswith(b"procname") and b"=" in s:
+                    idx = i
+                    break
+            if idx is None:
                 set_status("rev.ini 无 ProcName 行", err=True)
                 return
-            if "+exec auto.cfg" in m.group(2):
+            line = lines[idx]
+            ends_cr = line.endswith(bytes([13]))
+            body = line[:-1] if ends_cr else line
+            if b"+exec auto.cfg" in body.lower():
                 set_status("启动参数已包含 +exec auto.cfg", ok=True)
                 return
             bak = ini + ".bak_" + time.strftime("%Y%m%d%H%M%S")
             shutil.copy2(ini, bak)
-            new_line = m.group(1) + m.group(2).rstrip() + " +exec auto.cfg\n"
-            txt = txt[:m.start()] + new_line + txt[m.end():]
-            with open(ini, "w", encoding="utf-8", newline="") as f:
-                f.write(txt)
+            new_body = body.rstrip() + b" +exec auto.cfg"
+            lines[idx] = new_body + (bytes([13]) if ends_cr else b"")
+            with open(ini, "wb") as f:
+                f.write(bytes([10]).join(lines))
             set_status("已添加启动参数 +exec auto.cfg, 重启游戏生效", ok=True)
         except OSError as exc:
             set_status(f"添加失败: {exc}", err=True)
@@ -1213,7 +1226,29 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 p = os.path.join(cfg_dir, fn)
                 if os.path.isfile(p):
                     shutil.copy2(p, p + ".bak_" + time.strftime("%Y%m%d%H%M%S"))
-            updates = {k: vr["v"] for k, vr in cfg_vrs.items() if vr["v"] != ""}
+            # 构建 {命令名: 文件值}: scale 字段换算; 未修改的 scale 字段用文件原值
+            # (显示值 round 往返丢精度, 如透明度 200→显示 78→写回 199, deep-review 12轮)
+            updates: dict[str, str] = {}
+            for k, vr in cfg_vrs.items():
+                dv = vr["v"]
+                if dv == "":
+                    continue
+                f = FIELD_INDEX[k]
+                if f.scale != 1.0:
+                    if k in cfg_file_values:
+                        try:
+                            orig_disp = str(round(float(cfg_file_values[k]) / f.scale))
+                        except ValueError:
+                            orig_disp = None
+                        if orig_disp is not None and dv == orig_disp:
+                            updates[k] = cfg_file_values[k]   # 未修改: 用文件原值, 不经换算
+                            continue
+                    try:
+                        updates[k] = str(round(float(dv) * f.scale + 1e-9))
+                    except ValueError:
+                        updates[k] = dv
+                else:
+                    updates[k] = dv
             apply_values(cfg_dir, updates)
             st["cfg_dirty"] = False
             # 临时提示 + 按钮文字反馈 (与 rev.ini 保存一致; 状态栏 ok 分支仅图标, 2026-08)
@@ -1332,6 +1367,11 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         # 离开 CFG 页且 CFG 有未保存修改: 拦截确认 (CFG 独立 dirty, 2026-08 定稿 Q5)
         def _switch():
             nonlocal nav_index
+            # 离开 CFG 页且 CFG 未保存: 真实丢弃 (清 dirty + 重建页面, 下次进入重新读盘)
+            # (deep-review 12轮: 原实现只切 content 未清 cfg_dirty 未重建, 确认"丢弃"后修改残留)
+            if nav_index == CFG_NAV_INDEX and st["cfg_dirty"]:
+                st["cfg_dirty"] = False
+                nav_content[CFG_NAV_INDEX] = build_cfg_page()
             nav_index = target
             content_area.content = nav_content[nav_index]
             # 顶栏保存按钮语义随页切换: CFG 页保存 CFG, 其他页保存 rev.ini
