@@ -40,6 +40,11 @@
 | 26 | 状态栏 StatusBar | `.statusbar` | 编辑页 |
 | 27 | 编码切换 EncGroup | `.enc-group` `.enc-btn` | 编辑页 |
 | 28 | 开关 Switch | `.switch` | 预留 |
+| 29 | 头像修改提示 AvatarHint | `.avatar-hint` | 主页 |
+| 30 | 裁剪画布 CropCanvas | `.crop-canvas` | 修改头像 |
+| 31 | 裁剪框 CropBox | `.crop-box` `.crop-handle` | 修改头像 |
+| 32 | 头像预览 PreviewAvatar | `.preview-avatar` | 修改头像 |
+| 33 | 头像操作按钮 AvatarActionBtn | `.btn-av` | 修改头像 |
 
 > **Flet 原生豁免标注 (deep-review 7轮 F4 定稿)**: 以下组件在 Flet 中由原生控件直接表达
 > (rules.md §1.4 原生豁免, 不需要也不应封装成 ui.* 组件, 页面直用):
@@ -284,6 +289,46 @@
 - **何时不用**: 当前字段无布尔项(显示头像已删)
 - **Flet**: `ft.Switch`(track 40×22 pill, on 时 bg `brand`, thumb 18px 白)
 
+### 29. 头像修改提示 AvatarHint
+
+- **用途**: 头像 hover 时叠加半透明遮罩 + 相机图标,提示头像可点击修改
+- **Props**: 无(内部 i-camera 图标)
+- **何时用**: 主页头像 hover(头像入口 2026-08-23 新增: 点击进入修改头像页)
+- **何时不用**: 无头像修改入口时;编辑页头像不出现
+- **Flet**: Avatar 内 `ft.Container`(bg `avatar-hint` 半透明黑, opacity 0 → hover 1)+ 居中 `ft.Icon(camera_alt, 18, white)`
+
+### 30. 裁剪画布 CropCanvas
+
+- **用途**: 修改头像页左栏裁剪区容器,承载原图 + 裁剪框(CropBox)
+- **Props**: `image`(原图 src), `cropBox`(CropBox 引用)
+- **何时用**: 仅修改头像页
+- **何时不用**: 其他视图;图片无裁剪需求时直接 Image
+- **Flet**: `ft.Container`(480×480 矩形, bg `crop-canvas-bg`(比 bg-deep 更深), border `border-subtle`, 内 Stack: `ft.Image`(fit=COVER) + CropBox)
+
+### 31. 裁剪框 CropBox
+
+- **用途**: 1:1 方形裁剪框;拖动框体移动、拖动四角缩放、滚轮缩放,外圈半透明遮罩 + 内九宫格线
+- **Props**: `size`(边长, 32 ~ 画布边长), `x`/`y`(左上角), `onChange`(裁剪区域变化回调, 驱动预览同步)
+- **何时用**: 修改头像页裁剪区
+- **何时不用**: 无
+- **Flet**: `ft.Container`(方形, border 2px `brand`)+ 四角 handle(14×14 `brand` + 白边, 矩形)+ 九宫格线(1px `crop-grid`) + `ft.GestureDetector`(on_pan_update 移动 / on_scale_update 缩放);遮罩 = 底层半透明 `crop-mask`。⚠ 屏幕坐标 → 原图像素坐标换算需按 cover 缩放反推(见 HTML `applyPreviewTo`)
+
+### 32. 头像预览 PreviewAvatar
+
+- **用途**: 实时预览裁剪结果(96px 圆形),跟随 CropBox 裁剪区域同步
+- **Props**: 无(由 CropBox onChange 驱动, 用 background 定位裁剪区域)
+- **何时用**: 修改头像页右栏
+- **何时不用**: 主页头像用 Avatar(组件 5)
+- **Flet**: `ft.Container`(96×96 圆, border 2px `border-visible`, 内 `ft.Image` 按裁剪区域 clip)
+
+### 33. 头像操作按钮 AvatarActionBtn
+
+- **用途**: 修改头像页操作按钮(选择图片/恢复默认/取消/保存)
+- **Props**: `label`, `icon`, `variant`(primary/ghost/normal)
+- **何时用**: 修改头像页右栏;primary=选择图片/保存(主操作), ghost=恢复默认, normal=取消
+- **何时不用**: 顶栏操作用 BarButton;工具运行用 RunButton
+- **Flet**: primary=`ft.FilledButton`(h=36 矩形, bg `brand` 白字 700)/ ghost=`ft.OutlinedButton`(h=36 矩形, 透明底)
+
 ---
 
 ## 视图结构速查(供 Flet 翻译对照)
@@ -301,4 +346,9 @@
    ├─ group-2 修复工具: PageHead + 超时行 + ToolGrid(ToolCard×4)
    └─ group-3 CFG 配置: 顶部说明 + 提示条×N + 组标题×4 + ConfigCard×23 (2026-08-23 新增, 见 DESIGN.md CFG 配置页)
    → StatusBar(Icon + EncGroup)
+
+修改头像 (784×600, 2026-08-23 新增)
+└─ Window → EditTitleBar(返回 + 标题「修改头像」+ WinBtn×2)
+   → avatar-body: crop-stage(CropCanvas: Image + CropBox) + avatar-side
+   └─ avatar-side: PreviewAvatar(96px 圆) + 提示 + AvatarActionBtn×4(选择图片/恢复默认/取消/保存)
 ```

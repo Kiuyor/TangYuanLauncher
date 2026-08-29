@@ -51,6 +51,11 @@ COL_FOCUS_RING = "#336495ED"       # rgba(100,149,237,0.2)
 # 顶栏按钮 hover 提亮 (tokens.md §1.6 hover-btnbar 收编; 2026-08 UI 审查落地)
 COL_BTN_BAR_HOVER = "#12ffffff"    # rgba(255,255,255,0.07)
 
+# 裁剪 (tokens.md §1.7, 修改头像页 2026-08-23)
+COL_CROP_CANVAS_BG = "#0a0b10"     # 裁剪画布底 (比 bg-deep 更深)
+COL_CROP_MASK = "#8c000000"        # 裁剪框外遮罩 rgba(0,0,0,0.55)
+COL_CROP_GRID = "#40ffffff"        # 九宫格线 rgba(255,255,255,0.25)
+
 # 启动态 (收编硬编码, rules.md §2.3)
 COL_LAUNCH_BUSY = COL_BRAND_HOVER  # 启动中 = 主色 hover
 COL_LAUNCH_DONE = COL_OK           # 已启动 = 成功绿
@@ -126,6 +131,13 @@ H_BTN_BAR = 34
 H_BTN_RUN = 32
 W_BTN_WIN = 28
 S_DOT = 8
+# 修改头像页 (tokens.md §5, 2026-08-23)
+S_CROP_CANVAS = 480     # 裁剪画布边长
+S_CROP_HANDLE = 14      # 裁剪把手边长
+CROP_MIN = 32           # 裁剪框最小边长
+S_PREVIEW_AVATAR = 96   # 头像预览直径
+W_AVATAR_SIDE = 200     # 修改头像右栏宽
+H_BTN_AV = 36           # 头像操作按钮高
 
 # ==================== 字体族 ====================
 FONT_CN = "HarmonyOS Sans SC"   # HTML 事实源同款 (docs/fonts/sc 自托管 woff2; 2026-08 装系统版 ttf 用户级)

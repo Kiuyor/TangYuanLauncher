@@ -86,6 +86,16 @@
 
 > ⚠ 收编后 Flet 实现中**禁止再出现** `#4F7FE0`/`#10b981` 字面量,统一引用 `COL_BRAND_HOVER`/`COL_OK`。
 
+### 1.7 裁剪相关 (Crop, 2026-08-23 修改头像页新增)
+
+| Token | 语义名 | 色值 | 用途 | HTML | Flet |
+|-------|--------|------|------|------|------|
+| `crop-canvas-bg` | 裁剪画布底 | `#0a0b10` | 裁剪区画布背景(比 bg-deep 更深) | (CSS 内联) | `COL_CROP_CANVAS_BG` |
+| `crop-mask` | 裁剪遮罩 | `rgba(0,0,0,0.55)` | 裁剪框外遮罩、头像 hover 遮罩(avatar-hint) | (CSS 内联) | `COL_CROP_MASK` |
+| `crop-grid` | 裁剪九宫格线 | `rgba(255,255,255,0.25)` | 裁剪框内九宫格线 | (CSS 内联) | `COL_CROP_GRID` |
+
+> 裁剪把手白边 `#ffffff` 复用 `text-primary`(`COL_TEXT_PRIMARY`),不单列。
+
 ---
 
 ## 2. 字号 Font Sizes
@@ -164,6 +174,12 @@
 | `w-btn-win` | 28px | 窗口控制钮 | `.win-btn` | `W_BTN_WIN` |
 | `s-dot` | 8px | 状态圆点直径 | `.server-dot` | `S_DOT` |
 | `w-divider-v` | 1px | 竖向分割线 | `.divider-v` | (ft.VerticalDivider) |
+| `s-crop-canvas` | 480px | 裁剪画布边长 | `.crop-canvas` | `S_CROP_CANVAS` |
+| `s-crop-handle` | 14px | 裁剪把手边长 | `.crop-handle` | `S_CROP_HANDLE` |
+| `crop-min` | 32px | 裁剪框最小边长 | JS `CROP_MIN` | `CROP_MIN` |
+| `s-preview-avatar` | 96px | 头像预览直径 | `.preview-avatar` | `S_PREVIEW_AVATAR` |
+| `w-avatar-side` | 200px | 修改头像右栏宽 | `.avatar-side` | `W_AVATAR_SIDE` |
+| `h-btn-av` | 36px | 头像操作按钮高 | `.btn-av` | `H_BTN_AV` |
 
 ---
 

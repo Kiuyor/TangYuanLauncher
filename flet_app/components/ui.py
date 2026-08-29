@@ -25,6 +25,9 @@ from flet_app.theme import (
     COL_BRAND_BG_20,
     COL_BRAND_HOVER,
     COL_BRAND_LIGHT,
+    COL_CROP_CANVAS_BG,
+    COL_CROP_GRID,
+    COL_CROP_MASK,
     COL_ERR,
     COL_OK,
     COL_TEXT_DIM,
@@ -32,6 +35,7 @@ from flet_app.theme import (
     COL_TEXT_PRIMARY,
     COL_TEXT_SECONDARY,
     COL_WARN,
+    CROP_MIN,
     FONT_10,
     FONT_11,
     FONT_12,
@@ -41,11 +45,15 @@ from flet_app.theme import (
     FONT_36,
     FONT_44,
     FONT_MONO,
+    H_BTN_AV,
     H_BTN_RUN,
     H_INPUT,
     RADIUS_PILL,
     S_AVATAR,
     S_BTN_LAUNCH,
+    S_CROP_CANVAS,
+    S_CROP_HANDLE,
+    S_PREVIEW_AVATAR,
     SHADOW_BTN,
     SHADOW_BTN_HOVER,
     SPACE_6,
@@ -669,3 +677,251 @@ def status_bar(enc_selector, status_msg: ft.Text | None = None,
         bgcolor=COL_BG_DEEP,   # HTML 事实源 .statusbar 用 var(--bg-deep) (deep-review 5轮修正)
         border=_border_top(1, COL_BORDER_SUBTLE),
     )
+
+
+# ==================== 33. 头像操作按钮 AvatarActionBtn ====================
+def btn_av(label: str, icon=None, on_click=None, variant="normal"):
+    """修改头像页操作按钮 (design-system.md #33)。variant: primary/ghost/normal"""
+    if variant == "primary":
+        return ft.FilledButton(label, icon=icon, on_click=on_click, height=H_BTN_AV,
+                               style=ft.ButtonStyle(
+                                   bgcolor=COL_BRAND, color=COL_TEXT_PRIMARY,
+                                   shape=ft.RoundedRectangleBorder(radius=0)))  # 矩形
+    return ft.OutlinedButton(label, icon=icon, on_click=on_click, height=H_BTN_AV,
+                             style=ft.ButtonStyle(
+                                 bgcolor=ft.Colors.TRANSPARENT,
+                                 color=COL_TEXT_SECONDARY,
+                                 side=ft.BorderSide(1, COL_BORDER_VISIBLE),
+                                 shape=ft.RoundedRectangleBorder(radius=0)))  # 矩形
+
+
+# ==================== 32. 头像预览 PreviewAvatar ====================
+def preview_avatar() -> ft.Container:
+    """修改头像页预览 (96px 圆, design-system.md #32)。content 由调用方持引用更新"""
+    return ft.Container(
+        width=S_PREVIEW_AVATAR, height=S_PREVIEW_AVATAR,
+        border_radius=RADIUS_PILL,
+        bgcolor=COL_BG_CARD_2,
+        border=_border_all(2, COL_BORDER_VISIBLE),
+        alignment=ft.alignment.Alignment(0, 0),
+        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+    )
+
+
+# ==================== 30/31. 裁剪画布 CropCanvas ====================
+class CropCanvas(ft.Container):
+    """修改头像裁剪画布: 原图 + 1:1 裁剪框 (design-system.md #30/#31)。
+
+    交互: 拖动框体移动 / 拖动四角缩放(保持 1:1) / 滚轮围绕中心缩放。
+    约束: 边长 CROP_MIN ~ 画布边长, 位置不越界。
+    on_change(box): box=(left, top, right, bottom) 原图像素坐标, cover 缩放反推。
+    """
+
+    def __init__(self, on_change=None):
+        self.on_change = on_change
+        self._iw = 0          # 原图宽
+        self._ih = 0          # 原图高
+        self._x = 0.0         # 框左上角 x (画布坐标)
+        self._y = 0.0         # 框左上角 y
+        self._size = 0.0      # 框边长
+        self._mode = None     # None | 'move' | 'nw' | 'ne' | 'sw' | 'se'
+        self._drag = {}
+
+        # 1×1 透明 PNG base64: flet Image src 不能为空, 空串会渲染
+        # "A valid src value must be specified" 错误块且后续更新不消失
+        _TRANSPARENT_1PX = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ"
+                            "AAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
+        self._img = ft.Image(src=_TRANSPARENT_1PX, fit=ft.BoxFit.COVER,
+                             filter_quality=ft.FilterQuality.HIGH)
+        self._box = ft.Container(border=_border_all(2, COL_BRAND))
+        # 框外遮罩 (4 片半透明, 覆盖裁剪框外区域; design-system.md #31)
+        self._masks = [ft.Container(bgcolor=COL_CROP_MASK) for _ in range(4)]
+        # 九宫格线 (框内 2 横 2 竖)
+        self._grids = [ft.Container(bgcolor=COL_CROP_GRID) for _ in range(4)]
+        self._handles = {
+            d: ft.Container(width=S_CROP_HANDLE, height=S_CROP_HANDLE,
+                            bgcolor=COL_BRAND, border=_border_all(2, COL_TEXT_PRIMARY))
+            for d in ("nw", "ne", "sw", "se")
+        }
+        self._stack = ft.Stack(
+            [self._img, *self._masks, self._box, *self._grids, *self._handles.values()],
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
+        )
+        gd = ft.GestureDetector(
+            content=self._stack,
+            on_pan_start=self._on_pan_start,
+            on_pan_update=self._on_pan_update,
+            on_pan_end=self._on_pan_end,
+            on_scroll=self._on_scroll,
+        )
+        # 初始隐藏裁剪框系 (未选图时不显示; set_image 时才显示)
+        self._box.visible = False
+        for _m in self._masks:
+            _m.visible = False
+        for _g in self._grids:
+            _g.visible = False
+        for _h in self._handles.values():
+            _h.visible = False
+        super().__init__(
+            content=gd,
+            width=S_CROP_CANVAS, height=S_CROP_CANVAS,
+            bgcolor=COL_CROP_CANVAS_BG,
+            border=_border_all(1, COL_BORDER_SUBTLE),
+        )
+
+    # ---- 外部接口 ----
+    def set_image(self, src: str, natural_w: int, natural_h: int):
+        """设置原图 + 记录尺寸, 并重置裁剪框为居中 70%。"""
+        self._iw = natural_w
+        self._ih = natural_h
+        self._img.src = src
+        self._reset()
+
+    def current_box(self) -> tuple[int, int, int, int] | None:
+        """当前裁剪区域的原图像素 box; 未设图返回 None。"""
+        return self._emit_box()
+
+    # ---- 内部 ----
+    def _reset(self):
+        # 选图后显示裁剪框系
+        self._box.visible = True
+        for _m in self._masks:
+            _m.visible = True
+        for _g in self._grids:
+            _g.visible = True
+        for _h in self._handles.values():
+            _h.visible = True
+        s = S_CROP_CANVAS * 0.7
+        self._size = s
+        self._x = (S_CROP_CANVAS - s) / 2
+        self._y = (S_CROP_CANVAS - s) / 2
+        self._render()
+
+    def _clamp(self):
+        c = S_CROP_CANVAS
+        self._size = max(CROP_MIN, min(self._size, c))
+        self._x = max(0.0, min(self._x, c - self._size))
+        self._y = max(0.0, min(self._y, c - self._size))
+
+    def _render(self, emit: bool = True):
+        self._clamp()
+        c = S_CROP_CANVAS
+        x, y, s = self._x, self._y, self._size
+        self._box.left = x
+        self._box.top = y
+        self._box.width = s
+        self._box.height = s
+        # 遮罩 (上/下/左/右)
+        m = self._masks
+        m[0].left, m[0].top, m[0].width, m[0].height = 0, 0, c, y
+        m[1].left, m[1].top, m[1].width, m[1].height = 0, y + s, c, c - (y + s)
+        m[2].left, m[2].top, m[2].width, m[2].height = 0, y, x, s
+        m[3].left, m[3].top, m[3].width, m[3].height = x + s, y, c - (x + s), s
+        # 九宫格线 (2 横 2 竖)
+        g = self._grids
+        g[0].left, g[0].top, g[0].width, g[0].height = x, y + s / 3, s, 1
+        g[1].left, g[1].top, g[1].width, g[1].height = x, y + 2 * s / 3, s, 1
+        g[2].left, g[2].top, g[2].width, g[2].height = x + s / 3, y, 1, s
+        g[3].left, g[3].top, g[3].width, g[3].height = x + 2 * s / 3, y, 1, s
+        half = S_CROP_HANDLE / 2
+        pos = {
+            "nw": (self._x - half, self._y - half),
+            "ne": (self._x + self._size - half, self._y - half),
+            "sw": (self._x - half, self._y + self._size - half),
+            "se": (self._x + self._size - half, self._y + self._size - half),
+        }
+        for d, (hx, hy) in pos.items():
+            self._handles[d].left = hx
+            self._handles[d].top = hy
+        if emit:
+            self._emit()
+        self.update()
+
+    def _on_pan_start(self, e):
+        lx, ly = e.local_position.x, e.local_position.y
+        s = self._size
+        half = S_CROP_HANDLE / 2 + 6   # 命中容差
+        corners = {
+            "nw": (self._x, self._y),
+            "ne": (self._x + s, self._y),
+            "sw": (self._x, self._y + s),
+            "se": (self._x + s, self._y + s),
+        }
+        for d, (cx, cy) in corners.items():
+            if abs(lx - cx) <= half and abs(ly - cy) <= half:
+                self._mode = d
+                if d == "se":
+                    fx, fy = self._x, self._y
+                elif d == "nw":
+                    fx, fy = self._x + s, self._y + s
+                elif d == "ne":
+                    fx, fy = self._x + s, self._y
+                else:
+                    fx, fy = self._x, self._y + s
+                self._drag = {"fx": fx, "fy": fy}
+                return
+        if self._x <= lx <= self._x + s and self._y <= ly <= self._y + s:
+            self._mode = "move"
+            self._drag = {"ox": lx - self._x, "oy": ly - self._y}
+        else:
+            self._mode = None
+
+    def _on_pan_update(self, e):
+        if not self._mode:
+            return
+        lx, ly = e.local_position.x, e.local_position.y
+        if self._mode == "move":
+            self._x = lx - self._drag["ox"]
+            self._y = ly - self._drag["oy"]
+        else:
+            fx, fy = self._drag["fx"], self._drag["fy"]
+            ns = max(abs(lx - fx), abs(ly - fy))
+            ns = max(CROP_MIN, min(ns, S_CROP_CANVAS))
+            self._size = ns
+            if self._mode == "se":
+                self._x, self._y = fx, fy
+            elif self._mode == "nw":
+                self._x, self._y = fx - ns, fy - ns
+            elif self._mode == "ne":
+                self._x, self._y = fx - ns, fy
+            else:
+                self._x, self._y = fx, fy - ns
+        # 拖动中不触发 on_change (预览每帧重解码+编码实测卡顿):
+        # 预览更新在 main.py 节流, 松手时 _on_pan_end 强制补最后一帧
+        self._render(emit=False)
+
+    def _on_pan_end(self, e):
+        """松手: 清拖拽模式 + 强制 emit 最终 box (预览刷新到最后状态)。"""
+        self._mode = None
+        if self._drag:
+            self._drag = None
+        self._render()
+
+    def _on_scroll(self, e):
+        factor = 0.9 if e.scroll_delta.y > 0 else 1.1
+        ns = max(CROP_MIN, min(self._size * factor, S_CROP_CANVAS))
+        cx = self._x + self._size / 2
+        cy = self._y + self._size / 2
+        self._size = ns
+        self._x = cx - ns / 2
+        self._y = cy - ns / 2
+        self._render()
+
+    def _emit_box(self) -> tuple[int, int, int, int] | None:
+        """cover 缩放反推原图像素 box (与 HTML applyPreviewTo 同语义)。"""
+        if not self._iw or not self._ih or self._size <= 0:
+            return None
+        c = S_CROP_CANVAS
+        scale = max(c / self._iw, c / self._ih)
+        ox = (c - self._iw * scale) / 2
+        oy = (c - self._ih * scale) / 2
+        sx = (self._x - ox) / scale
+        sy = (self._y - oy) / scale
+        ss = self._size / scale
+        return (max(0, round(sx)), max(0, round(sy)),
+                min(self._iw, round(sx + ss)), min(self._ih, round(sy + ss)))
+
+    def _emit(self):
+        box = self._emit_box()
+        if box is not None and self.on_change:
+            self.on_change(box)

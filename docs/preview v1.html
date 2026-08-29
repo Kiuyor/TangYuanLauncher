@@ -538,6 +538,119 @@
   }
   .enc-btn.active { background: var(--brand); color: #fff; }
 
+  /* ===== 主页头像: 可点击修改 ===== */
+  .avatar { cursor: pointer; position: relative; }
+  .avatar:hover { border-color: var(--border-brand); }
+  .avatar .avatar-hint {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff; font-size: 11px; font-weight: 600;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .avatar:hover .avatar-hint { opacity: 1; }
+
+  /* ===== 修改头像 (裁剪界面) ===== */
+  .avatar-body {
+    flex: 1; display: flex;
+    background: var(--bg-main);
+    overflow: hidden;
+    position: relative; z-index: 1;
+  }
+  /* 左: 裁剪区 */
+  .crop-stage {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 24px; min-width: 0;
+  }
+  .crop-canvas {
+    position: relative;
+    width: 480px; height: 480px; max-width: 100%; max-height: 100%;
+    border: 1px solid var(--border-subtle);
+    overflow: hidden;
+    background: #0a0b10;
+    user-select: none;
+    cursor: crosshair;
+  }
+  .crop-canvas img {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+  }
+  /* 裁剪框: 1:1 方形, 品牌蓝边框 + 外圈遮罩 */
+  .crop-box {
+    position: absolute;
+    border: 2px solid var(--brand);
+    cursor: move;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+    box-sizing: border-box;
+  }
+  .crop-box .grid-line { position: absolute; background: rgba(255,255,255,0.25); pointer-events: none; }
+  .crop-box .grid-line.h { left: 0; right: 0; height: 1px; top: 33.33%; }
+  .crop-box .grid-line.h2 { left: 0; right: 0; height: 1px; top: 66.66%; }
+  .crop-box .grid-line.v { top: 0; bottom: 0; width: 1px; left: 33.33%; }
+  .crop-box .grid-line.v2 { top: 0; bottom: 0; width: 1px; left: 66.66%; }
+  .crop-handle {
+    position: absolute;
+    width: 14px; height: 14px;
+    background: var(--brand);
+    border: 2px solid #fff;
+    z-index: 2;
+  }
+  .crop-handle.nw { top: -7px; left: -7px; cursor: nwse-resize; }
+  .crop-handle.ne { top: -7px; right: -7px; cursor: nesw-resize; }
+  .crop-handle.sw { bottom: -7px; left: -7px; cursor: nesw-resize; }
+  .crop-handle.se { bottom: -7px; right: -7px; cursor: nwse-resize; }
+  /* 右: 预览 + 操作 */
+  .avatar-side {
+    width: 200px; flex-shrink: 0;
+    border-left: 1px solid var(--border-subtle);
+    background: var(--sidebar);
+    padding: 24px 16px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  .preview-label {
+    font-size: 11px; color: var(--text-4);
+    align-self: flex-start; font-weight: 600;
+  }
+  .preview-avatar {
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    border: 2px solid var(--border-visible);
+    overflow: hidden;
+    background: var(--card-2);
+    flex-shrink: 0;
+  }
+  .preview-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .crop-hint {
+    font-size: 11px; color: var(--text-4);
+    text-align: center; line-height: 1.7;
+  }
+  .avatar-actions {
+    display: flex; flex-direction: column; gap: 8px;
+    width: 100%; margin-top: auto;
+  }
+  .btn-av {
+    height: 36px;
+    font-size: 13px; font-weight: 600;
+    font-family: var(--font-cn);
+    cursor: pointer;
+    border: 1px solid var(--border-visible);
+    background: var(--card-2);
+    color: var(--text-2);
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn-av:hover { background: rgba(255,255,255,0.08); }
+  .btn-av .ic { font-size: 15px; }
+  .btn-av.primary {
+    background: var(--brand);
+    border-color: transparent;
+    color: #fff; font-weight: 700;
+  }
+  .btn-av.primary:hover { background: var(--brand-hover); }
+  .btn-av.ghost { background: transparent; }
+
   /* 隐藏态 */
   .hidden { display: none !important; }
 </style>
@@ -591,11 +704,21 @@
   <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
   </symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>
+  </symbol>
+  <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
+  </symbol>
+  <symbol id="i-rotate-ccw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+  </symbol>
 </svg>
 
 <div class="toolbar">
   <button id="tab-launcher" class="active" onclick="switchView('launcher')"><svg class="ic"><use href="#i-home"/></svg> 主页启动台</button>
   <button id="tab-edit" onclick="switchView('edit')"><svg class="ic"><use href="#i-settings"/></svg> 配置编辑页</button>
+  <button id="tab-avatar" onclick="switchView('avatar')"><svg class="ic"><use href="#i-camera"/></svg> 修改头像</button>
   <div class="zoom-group">
     <button onclick="setZoom(0)">75%</button>
     <button class="active" onclick="setZoom(1)">100%</button>
@@ -624,7 +747,10 @@
 
     <div class="launcher-body">
       <div class="launcher-card">
-        <div class="avatar"><span>汤</span></div>
+        <div class="avatar" onclick="switchView('avatar')" title="修改头像">
+          <span>汤</span>
+          <div class="avatar-hint"><svg class="ic" style="font-size:18px;"><use href="#i-camera"/></svg></div>
+        </div>
         <div class="nickname">米汤</div>
         <!-- 服务器监控: 示例值仅用于预览 UI 形态; 真实实现须 A2S 查询 ConnectServer 地址,
              查询失败显示灰点「离线」, 禁止展示编造人数 -->
@@ -881,6 +1007,61 @@
     </div>
   </div>
 
+  <!-- ==================== 修改头像 ==================== -->
+  <div class="window window-edit hidden" id="view-avatar">
+    <div class="window-label">修改头像 784×600</div>
+
+    <div class="edit-root">
+      <!-- 头部 -->
+      <div class="edit-titlebar">
+        <div class="left">
+          <div class="btn-bar" onclick="switchView('launcher')"><svg class="ic"><use href="#i-arrow-left"/></svg>返回</div>
+          <div class="divider-v"></div>
+          <span style="font-size:16px; font-weight:700;">修改头像</span>
+        </div>
+        <div class="right">
+          <div class="win-controls">
+            <div class="win-btn"><svg class="ic"><use href="#i-minus"/></svg></div>
+            <div class="win-btn close"><svg class="ic"><use href="#i-x"/></svg></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 主体 -->
+      <div class="avatar-body">
+        <!-- 左: 裁剪区 -->
+        <div class="crop-stage">
+          <div class="crop-canvas" id="crop-canvas">
+            <img id="crop-img" alt="">
+            <div class="crop-box" id="crop-box">
+              <div class="grid-line h"></div><div class="grid-line h2"></div>
+              <div class="grid-line v"></div><div class="grid-line v2"></div>
+              <div class="crop-handle nw" data-dir="nw"></div>
+              <div class="crop-handle ne" data-dir="ne"></div>
+              <div class="crop-handle sw" data-dir="sw"></div>
+              <div class="crop-handle se" data-dir="se"></div>
+            </div>
+          </div>
+        </div>
+        <!-- 右: 预览 + 操作 -->
+        <div class="avatar-side">
+          <div class="preview-label">预览</div>
+          <div class="preview-avatar" id="preview-avatar"></div>
+          <div class="crop-hint">拖动裁剪框调整范围<br>拖动四角缩放大小</div>
+          <div class="avatar-actions">
+            <button class="btn-av primary" onclick="pickAvatar()"><svg class="ic"><use href="#i-image"/></svg>选择图片</button>
+            <button class="btn-av ghost" onclick="resetAvatar()"><svg class="ic"><use href="#i-rotate-ccw"/></svg>恢复默认</button>
+          </div>
+          <div class="avatar-actions" style="margin-top:auto;">
+            <button class="btn-av" onclick="switchView('launcher')">取消</button>
+            <button class="btn-av primary" onclick="saveAvatar()"><svg class="ic"><use href="#i-save"/></svg>保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp,image/bmp" style="display:none" onchange="onAvatarPicked(this)">
+  </div>
+
 </div>
 
 <script>
@@ -888,8 +1069,11 @@
   function switchView(name) {
     document.getElementById('view-launcher').classList.toggle('hidden', name !== 'launcher');
     document.getElementById('view-edit').classList.toggle('hidden', name !== 'edit');
+    document.getElementById('view-avatar').classList.toggle('hidden', name !== 'avatar');
     document.getElementById('tab-launcher').classList.toggle('active', name === 'launcher');
     document.getElementById('tab-edit').classList.toggle('active', name === 'edit');
+    document.getElementById('tab-avatar').classList.toggle('active', name === 'avatar');
+    if (name === 'avatar') initAvatar();
   }
 
   // ===== 缩放 =====
@@ -990,6 +1174,160 @@
   function setEnc(el) {
     document.querySelectorAll('.enc-btn').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
+  }
+
+  // ===== 修改头像: 裁剪交互 =====
+  let cropCanvas, cropBox, previewAvatar, cropImg;
+  let crop = { x: 0, y: 0, size: 0 };
+  let dragging = null;   // null | 'move' | 'nw' | 'ne' | 'sw' | 'se'
+  let drag = { mx: 0, my: 0, x: 0, y: 0, size: 0 };
+  const CROP_MIN = 32;
+
+  // 默认示例图 (SVG 渐变, 模拟头像图; 真实实现为玩家本地选图)
+  const DEFAULT_AVATAR = "data:image/svg+xml," + encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='400' height='400'>" +
+    "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>" +
+    "<stop offset='0' stop-color='#6495ED'/><stop offset='1' stop-color='#10b981'/>" +
+    "</linearGradient></defs>" +
+    "<rect width='400' height='400' fill='url(#g)'/>" +
+    "<circle cx='200' cy='200' r='120' fill='rgba(255,255,255,0.35)'/>" +
+    "<rect x='70' y='70' width='260' height='260' rx='50' fill='none' stroke='rgba(255,255,255,0.6)' stroke-width='10'/>" +
+    "</svg>"
+  );
+
+  function initAvatar() {
+    cropCanvas = document.getElementById('crop-canvas');
+    cropBox = document.getElementById('crop-box');
+    previewAvatar = document.getElementById('preview-avatar');
+    cropImg = document.getElementById('crop-img');
+    if (!cropImg.getAttribute('src')) cropImg.src = DEFAULT_AVATAR;
+    cropImg.onload = function () { resetCropBox(); };
+    if (cropImg.complete && cropImg.naturalWidth) resetCropBox();
+    if (!cropCanvas._bound) { attachCropEvents(); cropCanvas._bound = true; }
+  }
+
+  function resetCropBox() {
+    const w = cropCanvas.clientWidth, h = cropCanvas.clientHeight;
+    const s = Math.floor(Math.min(w, h) * 0.7);
+    crop = { x: Math.floor((w - s) / 2), y: Math.floor((h - s) / 2), size: s };
+    renderCrop();
+  }
+
+  function renderCrop() {
+    cropBox.style.left = crop.x + 'px';
+    cropBox.style.top = crop.y + 'px';
+    cropBox.style.width = crop.size + 'px';
+    cropBox.style.height = crop.size + 'px';
+    applyPreviewTo(previewAvatar, 96);
+  }
+
+  // 把裁剪框区域映射到原图, 用 background 定位到目标元素 (object-fit: cover 语义)
+  function applyPreviewTo(target, px) {
+    const cw = cropCanvas.clientWidth, ch = cropCanvas.clientHeight;
+    const iw = cropImg.naturalWidth, ih = cropImg.naturalHeight;
+    if (!cw || !ch || !iw || !ih) return;
+    const scale = Math.max(cw / iw, ch / ih);
+    const ox = (cw - iw * scale) / 2, oy = (ch - ih * scale) / 2;
+    const srcX = (crop.x - ox) / scale;
+    const srcY = (crop.y - oy) / scale;
+    const srcSize = crop.size / scale;
+    const zoom = px / srcSize;
+    target.style.backgroundImage = "url('" + cropImg.src + "')";
+    target.style.backgroundSize = (iw * zoom) + 'px ' + (ih * zoom) + 'px';
+    target.style.backgroundPosition = (-srcX * zoom) + 'px ' + (-srcY * zoom) + 'px';
+    target.style.backgroundRepeat = 'no-repeat';
+  }
+
+  function canvasPos(e) {
+    const r = cropCanvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function attachCropEvents() {
+    cropBox.addEventListener('mousedown', function (e) {
+      if (e.target.classList.contains('crop-handle')) return;
+      dragging = 'move';
+      const p = canvasPos(e);
+      drag = { mx: p.x, my: p.y, x: crop.x, y: crop.y, size: crop.size };
+      e.preventDefault();
+    });
+    cropBox.querySelectorAll('.crop-handle').forEach(function (h) {
+      h.addEventListener('mousedown', function (e) {
+        dragging = h.getAttribute('data-dir');
+        const p = canvasPos(e);
+        drag = { mx: p.x, my: p.y, x: crop.x, y: crop.y, size: crop.size };
+        e.preventDefault(); e.stopPropagation();
+      });
+    });
+    cropCanvas.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      let ns = Math.round(crop.size * factor);
+      ns = Math.max(CROP_MIN, Math.min(ns, cropCanvas.clientWidth, cropCanvas.clientHeight));
+      const cx = crop.x + crop.size / 2, cy = crop.y + crop.size / 2;
+      crop.size = ns; crop.x = cx - ns / 2; crop.y = cy - ns / 2;
+      clampCrop(); renderCrop();
+    });
+    window.addEventListener('mousemove', onDragMove);
+    window.addEventListener('mouseup', function () { dragging = null; });
+  }
+
+  function onDragMove(e) {
+    if (!dragging) return;
+    const p = canvasPos(e);
+    const dx = p.x - drag.mx, dy = p.y - drag.my;
+    if (dragging === 'move') {
+      crop.x = drag.x + dx; crop.y = drag.y + dy;
+    } else {
+      let fx, fy;
+      if (dragging === 'se') { fx = drag.x; fy = drag.y; }
+      else if (dragging === 'nw') { fx = drag.x + drag.size; fy = drag.y + drag.size; }
+      else if (dragging === 'ne') { fx = drag.x + drag.size; fy = drag.y; }
+      else { fx = drag.x; fy = drag.y + drag.size; }
+      let ns = Math.max(Math.abs(p.x - fx), Math.abs(p.y - fy));
+      ns = Math.max(CROP_MIN, ns);
+      crop.size = ns;
+      if (dragging === 'se') { crop.x = fx; crop.y = fy; }
+      else if (dragging === 'nw') { crop.x = fx - ns; crop.y = fy - ns; }
+      else if (dragging === 'ne') { crop.x = fx - ns; crop.y = fy; }
+      else { crop.x = fx; crop.y = fy - ns; }
+    }
+    clampCrop(); renderCrop();
+  }
+
+  function clampCrop() {
+    const cw = cropCanvas.clientWidth, ch = cropCanvas.clientHeight;
+    crop.size = Math.max(CROP_MIN, Math.min(crop.size, cw, ch));
+    crop.x = Math.max(0, Math.min(crop.x, cw - crop.size));
+    crop.y = Math.max(0, Math.min(crop.y, ch - crop.size));
+  }
+
+  function pickAvatar() { document.getElementById('avatar-file').click(); }
+
+  function onAvatarPicked(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function (ev) {
+      cropImg.src = ev.target.result;
+      cropImg.onload = resetCropBox;
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+  }
+
+  function resetAvatar() {
+    cropImg.src = DEFAULT_AVATAR;
+    cropImg.onload = resetCropBox;
+  }
+
+  function saveAvatar() {
+    // 演示: 把裁剪结果应用到主页头像 (真实实现: 写 avatar.dat + avatar1.dat, 重启游戏生效)
+    const mainAvatar = document.querySelector('#view-launcher .avatar');
+    applyPreviewTo(mainAvatar, 100);
+    const span = mainAvatar.querySelector('span');
+    if (span) span.style.display = 'none';
+    switchView('launcher');
   }
 </script>
 

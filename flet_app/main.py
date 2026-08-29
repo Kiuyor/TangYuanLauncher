@@ -5,6 +5,8 @@
 实施计划见: plan.md
 """
 import asyncio
+import base64
+import io
 import json
 import os
 import re
@@ -16,9 +18,11 @@ import time
 import urllib.request
 
 import flet as ft
+from PIL import Image as PILImage
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from app import VERSION
+from app import APP_VERSION
+from app import avatar as avatar_mod
 from app.cfg_fields import (
     FIELD_INDEX,
     GROUPS,
@@ -34,7 +38,7 @@ from app.fields import (
 )
 from app.ini_model import RevIni, default_ini_text
 from app.locator import find_cfg_dir, find_csgo_dir, locate_rev_ini
-from app.settings import set_user_csgo_dir
+from app.settings import SETTINGS_DIR, set_user_csgo_dir
 from flet_app.components import ui
 from flet_app.theme import (
     COL_BG_CARD as COL_CARD,  # 卡片底 (bg-card #161922)
@@ -71,7 +75,9 @@ from flet_app.theme import (
     FONT_36,
     FONT_CN,
     FONT_MONO,
+    S_PREVIEW_AVATAR,
     SHADOW_CARD,
+    W_AVATAR_SIDE,
 )
 
 ON_BRAND = COL_TEXT_PRIMARY        # 主色底上的文字/图标: 白字 (对比 3.5:1, 大字号可读; 2026-08 新主题)
@@ -89,6 +95,15 @@ def find_avatar_path(csgo_dir):
         if os.path.isfile(p):
             return p
     return None
+
+
+def find_preview_path() -> str:
+    """启动器展示用清晰头像 (用户数据目录, 256×256 PNG); 缺失返回 None。
+
+    两套逻辑 (2026-08-23): 游戏头像 64×64 固定, 主页展示读清晰版不糊。
+    """
+    p = os.path.join(SETTINGS_DIR, "avatar_preview.png")
+    return p if os.path.isfile(p) else None
 
 
 # 主页卡片尺寸
@@ -1418,21 +1433,38 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
 
     # ==================== 主页启动台 ====================
     def _apply_avatar(nick):
-        """头像: avatar.dat → avatar1.dat → 主界面底色圆 + 昵称首字母"""
-        src = find_avatar_path(st["csgo_dir"] or find_csgo_dir())
+        """头像: 清晰版(用户数据目录 256px) → avatar.dat → avatar1.dat →
+        主界面底色圆 + 昵称首字母。
+
+        两套逻辑 (2026-08-23): 游戏头像 64×64 固定, 主页展示优先读 256px
+        清晰版不糊; 缺失回退 64 版兼容旧数据/首次运行。
+        用裸 base64 而非文件路径: flet Image 对同一文件路径有渲染缓存,
+        保存头像后主页仍显示旧图 (实测 2026-08-23); base64 内容变化即强制重绘。
+        """
+        src = find_preview_path() or find_avatar_path(st["csgo_dir"] or find_csgo_dir())
         if src:
-            # 必须固定 width/height: Image 不设尺寸会按原始分辨率渲染
-            # (实测 avatar.dat 235×315 撑破布局, 盖住昵称/头衔/胶囊)
-            avatar.content = ft.Image(src=src, width=AVATAR_D, height=AVATAR_D,
-                                      fit=ft.BoxFit.COVER,
-                                      filter_quality=ft.FilterQuality.HIGH,  # 低清 avatar.dat 缩放平滑 (2026-08 UI 审查)
-                                      border_radius=AVATAR_D // 2)
-        else:
-            avatar.content = ft.Text((nick or "汤")[:1], size=FONT_36,
-                                     color=COL_BRAND_LIGHT, weight=ft.FontWeight.W_700)
+            try:
+                with open(src, "rb") as f:
+                    data = f.read()
+                b64 = base64.b64encode(data).decode()
+            except OSError:
+                b64 = ""
+            if b64:
+                # 必须固定 width/height: Image 不设尺寸会按原始分辨率渲染
+                # (实测 avatar.dat 235×315 撑破布局, 盖住昵称/头衔/胶囊)
+                avatar.content = ft.Image(src=b64, width=AVATAR_D, height=AVATAR_D,
+                                          fit=ft.BoxFit.COVER,
+                                          filter_quality=ft.FilterQuality.HIGH,  # 低清 avatar.dat 缩放平滑 (2026-08 UI 审查)
+                                          border_radius=AVATAR_D // 2)
+                return
+        avatar.content = ft.Text((nick or "汤")[:1], size=FONT_36,
+                                 color=COL_BRAND_LIGHT, weight=ft.FontWeight.W_700)
 
     # 头像 (100px 正圆, 矢车菊蓝浅字, 无外发光; design-system.md #5)
     avatar = ui.avatar("汤")
+    # 头像可点击进入修改头像页 (2026-08-23 新增; enter_avatar 定义在下方, lambda 延迟绑定)
+    avatar.on_click = lambda e: enter_avatar()
+    avatar.tooltip = "修改头像"
     # 主页昵称: 组件库 Nickname (单行+省略号, 防超长昵称撑爆固定 360×510 布局 deep-review F10)
     nick_label = ui.nickname("未定位", size=24)
     unlocated_hint = ft.Text("⚠ rev.ini 未定位, 点配置指定目录", size=12, color=COL_TEXT_DIM)
@@ -1902,7 +1934,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
     # 主页: 版本徽章 + 产品名(左) + 窗口控制(右)
     launcher_head = ft.Row([
         ft.Row([
-            ui.version_tag(f"v{VERSION}"),
+            ui.version_tag(f"v{APP_VERSION}"),
             # 产品名 (design-system.md #6 字号 18/700)
             ft.Text("汤圆启动器", size=18, weight=ft.FontWeight.W_700, color=COL_TEXT_SECONDARY),
         ], spacing=10),
@@ -1993,6 +2025,272 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         expand=True,
     )
     body = ft.Container(content=view_switcher, expand=True)
+
+    # ==================== 修改头像 (2026-08-23 新增) ====================
+    # 选图状态: 当前原图 bytes (保存时 PIL 裁剪用); 未选图时 None
+    avatar_picked = {"bytes": None}
+
+    # 预览节流状态 (2026-08-23 用户实测: 拖动裁剪框非常卡 — 根因是每帧
+    # 重新解码整张原图 + PNG 编码 + 整页 update; 优化: 原图只解码一次 +
+    # 150ms 节流 + 停顿后防抖补最后一帧)
+    preview_state = {"last": 0.0, "img": None, "pending": None, "timer": None}
+
+    def _render_preview(box):
+        """box → 96×96 圆形预览 (解码缓存复用, 拖动帧只 crop+resize)"""
+        data = avatar_picked["bytes"]
+        if data is None:
+            return
+        try:
+            img = preview_state["img"]
+            if img is None:
+                img = PILImage.open(io.BytesIO(data))
+                img.load()
+                preview_state["img"] = img
+            img = img.crop(box)
+            img = img.resize((S_PREVIEW_AVATAR, S_PREVIEW_AVATAR), PILImage.LANCZOS)
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGBA")
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            b64 = base64.b64encode(buf.getvalue()).decode()
+            avatar_preview.content = ft.Image(
+                src=b64,   # 裸 base64 (flet Image.src 支持; data URI 前缀实测不可靠)
+                width=S_PREVIEW_AVATAR, height=S_PREVIEW_AVATAR,
+                fit=ft.BoxFit.COVER, border_radius=S_PREVIEW_AVATAR // 2)
+            avatar_preview.update()
+        except Exception:  # noqa: BLE001, S110 - 预览裁剪失败静默, 不影响主流程
+            pass
+
+    def _flush_preview():
+        """防抖到点: 补渲染被节流跳过的最后一帧 (拖动/滚轮停顿后)。"""
+        preview_state["timer"] = None
+        b = preview_state["pending"]
+        preview_state["pending"] = None
+        if b is not None:
+            preview_state["last"] = time.monotonic()
+            _render_preview(b)
+
+    def _preview_from_box(box):
+        """裁剪框 box → 预览 (150ms 节流; 拖动中只挪裁剪框不重算预览)"""
+        if avatar_picked["bytes"] is None:
+            return
+        now = time.monotonic()
+        if now - preview_state["last"] < 0.15:
+            preview_state["pending"] = box
+            return
+        preview_state["last"] = now
+        _render_preview(box)
+        if preview_state["timer"]:
+            preview_state["timer"].cancel()
+        preview_state["timer"] = threading.Timer(
+            0.2, lambda: page.run_thread(_flush_preview))
+        preview_state["timer"].daemon = True
+        preview_state["timer"].start()
+
+    def _read_file_bytes(path: str) -> bytes:
+        """同步读文件 (async 回调里经 asyncio.to_thread 调用, 不阻塞事件循环)"""
+        with open(path, "rb") as f:
+            return f.read()
+
+    def _pick_avatar_image(_=None):
+        """选图: ctypes 调 Windows 原生 GetOpenFileNameW (模态对话框)。
+
+        flet 0.86.5 桌面引擎不支持 FilePicker 控件 (实测报 'Unknown control:
+        FilePicker'); tkinter 对话框在后台线程创建 Tk 会挂起 (Windows Tk 主循环
+        绑定主线程, 实测 askopenfilename 不返回) — 原生 API 最可靠。
+        模态对话框期间 flet 事件循环阻塞属预期 (用户只在对话框内操作)。
+        """
+        def _dbg(msg):
+            with open(r"C:\Users\75017\AppData\Local\Temp\avatar_dbg.txt", "a",
+                      encoding="utf-8") as _f:
+                _f.write(msg + "\n")
+
+        import ctypes
+        from ctypes import wintypes
+
+        class _OFN(ctypes.Structure):
+            _fields_ = [
+                ("lStructSize", wintypes.DWORD),
+                ("hwndOwner", wintypes.HWND),
+                ("hInstance", wintypes.HINSTANCE),
+                ("lpstrFilter", wintypes.LPCWSTR),
+                ("lpstrCustomFilter", wintypes.LPWSTR),
+                ("nMaxCustFilter", wintypes.DWORD),
+                ("nFilterIndex", wintypes.DWORD),
+                ("lpstrFile", wintypes.LPWSTR),
+                ("nMaxFile", wintypes.DWORD),
+                ("lpstrFileTitle", wintypes.LPWSTR),
+                ("nMaxFileTitle", wintypes.DWORD),
+                ("lpstrInitialDir", wintypes.LPCWSTR),
+                ("lpstrTitle", wintypes.LPCWSTR),
+                ("Flags", wintypes.DWORD),
+                ("nFileOffset", wintypes.WORD),
+                ("nFileExtension", wintypes.WORD),
+                ("lpstrDefExt", wintypes.LPCWSTR),
+                ("lCustData", wintypes.LPARAM),
+                ("lpfnHook", wintypes.LPVOID),
+                ("lpTemplateName", wintypes.LPCWSTR),
+                ("pvReserved", wintypes.LPVOID),
+                ("dwReserved", wintypes.DWORD),
+                ("FlagsEx", wintypes.DWORD),
+            ]
+
+        def _win_open_file(title: str, filter_str: str) -> str | None:
+            buf = ctypes.create_unicode_buffer(2048)
+            ofn = _OFN()
+            ofn.lStructSize = ctypes.sizeof(_OFN)
+            ofn.lpstrFilter = filter_str
+            # ctypes 结构体 c_wchar_p 字段不能直接赋 unicode buffer (实测抛
+            # "incompatible types, c_wchar_Array_2048 instance instead of
+            # c_wchar_p instance" 导致 flet 错误卡片), 必须 cast 成指针
+            ofn.lpstrFile = ctypes.cast(buf, wintypes.LPWSTR)
+            ofn.nMaxFile = 2048
+            ofn.lpstrTitle = title
+            ofn.Flags = 0x00001000   # OFN_FILEMUSTEXIST
+            if ctypes.windll.comdlg32.GetOpenFileNameW(ctypes.byref(ofn)):
+                return buf.value
+            return None
+
+        try:
+            _dbg("work start")
+            path = _win_open_file(
+                "选择头像图片",
+                "图片文件\0*.jpg;*.jpeg;*.png;*.webp;*.bmp\0所有文件\0*.*\0\0")
+            if not path:
+                _dbg("no path (cancelled)")
+                return
+            _dbg(f"path={path}")
+            try:
+                data = _read_file_bytes(path)
+            except OSError as ex:
+                msg = f"读取图片失败: {ex}"
+                _flash_status(msg, err=True)
+                return
+            _dbg(f"read {len(data)} bytes")
+            err = avatar_mod.validate_image(data)
+            if err:
+                _dbg(f"validate err: {err}")
+                _flash_status(err, err=True)
+                return
+            try:
+                img = PILImage.open(io.BytesIO(data))
+                w, h = img.size
+                _dbg(f"img size {w}x{h}")
+            except Exception:  # noqa: BLE001
+                _flash_status("无法识别的图片格式", err=True)
+                return
+
+            avatar_picked["bytes"] = data
+            # 换图重置预览缓存 (原图解码缓存失效 + 预览立即刷新)
+            preview_state["img"] = None
+            preview_state["last"] = 0.0
+            # flet Image.src 支持裸 base64 字符串 (空串会渲染 "A valid src value
+            # must be specified" 错误块且不消失 — 已用 1×1 透明 PNG 占位修复)
+            crop_canvas.set_image(base64.b64encode(data).decode(), w, h)
+            _dbg("set_image done")
+            page.update()
+        except Exception as ex:  # noqa: BLE001 - 兜底写日志, 避免 flet 错误卡片
+            _dbg(f"ERROR: {ex!r}")
+            msg = f"选择图片失败: {ex}"
+            _flash_status(msg, err=True)
+
+    def enter_avatar(_=None):
+        """主页头像点击: 窗口扩到 784×600 + 切修改头像视图"""
+        _animate_window(*WIN_EDIT, on_done=show_avatar)
+
+    def show_avatar():
+        server_epoch["n"] = 0   # 停服务器状态轮询 (修改头像期间不刷主页 UI)
+        title_bar.content = avatar_head
+        view_switcher.content = avatar_view
+        status_bar.visible = False
+        page.window.focused = True
+        page.update()
+
+    def on_back_avatar(_=None):
+        show_launcher()
+        _animate_window(*WIN_HOME)
+
+    def on_avatar_save(_=None):
+        d = st["csgo_dir"] or find_csgo_dir() or ""
+        if not d:
+            _flash_status("未定位游戏目录, 请先在配置页指定", err=True)
+            return
+        if avatar_picked["bytes"] is None:
+            _flash_status("请先选择一张图片", err=True)
+            return
+        box = crop_canvas.current_box()
+        if box is None:
+            _flash_status("裁剪区域无效", err=True)
+            return
+        ok, err = avatar_mod.save_avatar(
+            d, avatar_picked["bytes"], box,
+            preview_path=os.path.join(SETTINGS_DIR, "avatar_preview.png"))
+        if not ok:
+            _flash_status(err, err=True)
+            return
+        _flash_status("头像已保存, 重启游戏生效")
+        show_launcher()
+        _animate_window(*WIN_HOME)
+
+    def on_avatar_reset(_=None):
+        d = st["csgo_dir"] or find_csgo_dir() or ""
+        if not d:
+            _flash_status("未定位游戏目录, 请先在配置页指定", err=True)
+            return
+        ok, err = avatar_mod.restore_default_avatar(d)
+        if not ok:
+            _flash_status(err, err=True)
+            return
+        # 同步清掉清晰预览版 → 主页回退显示原厂 64×64 (两套逻辑联动)
+        try:
+            os.remove(os.path.join(SETTINGS_DIR, "avatar_preview.png"))
+        except OSError:
+            pass
+        _flash_status("已恢复默认头像")
+        show_launcher()
+        _animate_window(*WIN_HOME)
+
+    avatar_preview = ui.preview_avatar()
+    crop_canvas = ui.CropCanvas(on_change=_preview_from_box)
+
+    # 修改头像页标题栏: 返回 + 标题 (design-system.md 修改头像视图)
+    avatar_head = ft.Row([
+        ft.Row([
+            ui.win_btn(ft.Icons.ARROW_BACK, "返回", on_click=on_back_avatar),
+            ft.Text("修改头像", size=16, weight=ft.FontWeight.W_700),
+        ], spacing=10),
+        win_controls,
+    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+
+    # 修改头像页主体: 左=裁剪区, 右=预览+操作 (design-system.md 修改头像视图)
+    avatar_view = ft.Row([
+        ft.Container(
+            content=crop_canvas,
+            expand=True,
+            alignment=ft.alignment.Alignment(0, 0),
+            padding=ft.padding.Padding(left=24, top=24, right=24, bottom=24),
+        ),
+        ft.Container(
+            content=ft.Column([
+                ft.Text("预览", size=11, weight=ft.FontWeight.W_600, color=COL_TEXT_DIM),
+                avatar_preview,
+                ft.Text("拖动裁剪框调整范围\n拖动四角缩放大小", size=11,
+                        color=COL_TEXT_DIM, text_align=ft.TextAlign.CENTER),
+                ft.Container(expand=True),
+                ui.btn_av("选择图片", icon=ft.Icons.IMAGE,
+                          on_click=_pick_avatar_image),
+                ui.btn_av("恢复默认", icon=ft.Icons.RESTORE,
+                          on_click=on_avatar_reset, variant="ghost"),
+                ui.btn_av("取消", on_click=on_back_avatar),
+                ui.btn_av("保存", icon=ft.Icons.SAVE,
+                          on_click=on_avatar_save, variant="primary"),
+            ], spacing=14, horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            width=W_AVATAR_SIDE,
+            bgcolor=COL_BG,
+            border=ft.Border(left=ft.BorderSide(1, COL_BORDER_SUBTLE)),
+            padding=ft.padding.Padding(left=16, top=24, right=16, bottom=24),
+        ),
+    ], expand=True)
 
     page.add(ft.Container(
         content=ft.Column([
