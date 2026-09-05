@@ -31,6 +31,7 @@ from flet_app.theme import (
     H_BTN_AV,
     H_BTN_RUN,
     H_INPUT,
+    H_STATUSBAR,
     RADIUS_CARD,
     RADIUS_CTRL,
     RADIUS_PILL,
@@ -38,6 +39,7 @@ from flet_app.theme import (
     S_BTN_LAUNCH,
     S_CROP_CANVAS,
     S_CROP_HANDLE,
+    S_DOT,
     S_PREVIEW_AVATAR,
     SPACE_6,
     SPACE_8,
@@ -154,7 +156,7 @@ class ServerMonitor(ft.Row):
         self._ever_attached = False   # 是否曾挂上 page (区分"构建初期未挂载"与"已被重建分离")
         self._hovered = False
         self._dot = ft.Container(
-            width=8, height=8, border_radius=RADIUS_PILL,
+            width=S_DOT, height=S_DOT, border_radius=RADIUS_PILL,
             bgcolor=theme.COL_OK, shadow=theme.SHADOW_DOT_ONLINE,
             animate_opacity=ft.Animation(1000, theme.EASE_STANDARD),
         )
@@ -299,7 +301,7 @@ class ServerPanel(ft.Container):
         else:
             controls = []
             for r in rows:
-                dot = ft.Container(width=8, height=8, border_radius=RADIUS_PILL)
+                dot = ft.Container(width=S_DOT, height=S_DOT, border_radius=RADIUS_PILL)
                 if r.get("status") == "online":
                     dot.bgcolor = theme.COL_OK
                     dot.shadow = theme.SHADOW_DOT_ONLINE
@@ -442,10 +444,10 @@ class LaunchButton(ft.Container):
     def set_state(self, state: str, tooltip: str | None = None):
         self._state = state
         if state == "launching":
-            self.bgcolor = theme.COL_BRAND_HOVER
+            self.bgcolor = theme.COL_LAUNCH_BUSY   # 收编别名 (= COL_BRAND_HOVER, rules §2.3)
             self._nudge()
         elif state == "running":
-            self.bgcolor = theme.COL_OK
+            self.bgcolor = theme.COL_LAUNCH_DONE   # 收编别名 (= COL_OK)
             # 已启动绿辉光 (HTML: 0 4px 20px var(--launch-glow), tokens §1.6)
             self.shadow = ft.BoxShadow(blur_radius=20, spread_radius=0,
                                        color=theme.COL_LAUNCH_GLOW,
@@ -1117,7 +1119,7 @@ def status_bar(enc_selector, status_msg: ft.Text | None = None,
             ft.Container(expand=True),
             enc_selector,
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-        height=64,
+        height=H_STATUSBAR,
         padding=_pad(h=SPACE_16),
         bgcolor=theme.COL_BG_DEEP,   # HTML 事实源 .statusbar 用 var(--bg-deep) (deep-review 5轮修正)
         border=_border_top(1, theme.COL_BORDER_SUBTLE),

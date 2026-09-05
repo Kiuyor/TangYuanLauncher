@@ -83,9 +83,8 @@ def find_preview_path() -> str:
 CARD_W = 360
 
 # 窗口尺寸随布局切换: 主页 360×510 竖卡(窗口即卡) / 编辑 784×600 横屏, 向心步进缓动
-WIN_HOME = (360, 510)
-WIN_EDIT = (784, 600)
-WIN_MIN = (360, 510)
+# 尺寸来源 = theme.WIN_LAUNCHER / theme.WIN_EDIT 令牌 (2026-09-05 令牌接线:
+# 原 WIN_HOME/WIN_EDIT/WIN_MIN 本地常量与令牌双份事实, 已删)
 
 # ServerPanel 悬停面板锚点 (主页内容区坐标; design-system.md #34 锚定胶囊下方,
 # HTML 事实源 .server-panel top:292px 窗口坐标 - 标题栏 56)
@@ -463,8 +462,8 @@ def main(page: ft.Page):
     # 用户反馈"设置按钮有悬停反馈但点击没反应", 日志确认事件未到 Python)。
     # 黑边问题已随矩形化消失 — 容器无圆角铺满窗口, 窗口背景不外露, 无需不透明兜底
     page.window.bgcolor = ft.Colors.TRANSPARENT
-    page.window.width, page.window.height = WIN_HOME
-    page.window.min_width, page.window.min_height = WIN_MIN
+    page.window.width, page.window.height = theme.WIN_LAUNCHER
+    page.window.min_width, page.window.min_height = theme.WIN_LAUNCHER
     page.window.frameless = True
     page.window.shadow = False   # 关窗口阴影: frameless+透明背景下 DWM 阴影在圆角边缘
     # 渲染成绿色/青色光晕(用户报告"一圈绿色光晕", 2026-08), 关闭后消失
@@ -1013,7 +1012,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             ta = ui.input_dark(
                 value=str(default) if default else "",
                 placeholder=field.get("placeholder") or None,   # 占位符接线 (视觉审计 2026-08: 原未传入)
-                multiline=True, mono=True, font_size=16,
+                multiline=True, mono=True, font_size=theme.FONT_16,
                 min_lines=3, max_lines=6,   # 原内联实现的行数 (3-6), 迁移组件不改变视觉
                 on_change=lambda e: (vr.__setitem__("v", e.control.value), mark_dirty(), _sync_chips()))
             # 推荐参数 chips (design-system.md #18): 点击 toggle 添加/移除
@@ -1549,8 +1548,8 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
     for i, g in enumerate(FIELD_GROUPS):
         icon = icon_map.get(g.get("icon_key", "wrench"), ft.Icons.BUILD)
         nav_items.append(ft.NavigationRailDestination(
-            icon=ft.Icon(icon, color=theme.COL_TEXT_DIM),
-            selected_icon=ft.Icon(icon, color=theme.COL_BRAND_SOFT),
+            icon=ft.Icon(icon, size=theme.FONT_20_IC, color=theme.COL_TEXT_DIM),
+            selected_icon=ft.Icon(icon, size=theme.FONT_20_IC, color=theme.COL_BRAND_SOFT),
             label=ft.Text(g["title"], size=12)))
         if g.get("type") == "cfg":
             nav_content.append(build_cfg_page())
@@ -2379,8 +2378,8 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         for i, g in enumerate(FIELD_GROUPS):
             icon = icon_map.get(g.get("icon_key", "wrench"), ft.Icons.BUILD)
             nav_items.append(ft.NavigationRailDestination(
-                icon=ft.Icon(icon, color=theme.COL_TEXT_DIM),
-                selected_icon=ft.Icon(icon, color=theme.COL_BRAND_SOFT),
+                icon=ft.Icon(icon, size=theme.FONT_20_IC, color=theme.COL_TEXT_DIM),
+                selected_icon=ft.Icon(icon, size=theme.FONT_20_IC, color=theme.COL_BRAND_SOFT),
                 label=ft.Text(g["title"], size=12)))
             if g.get("type") == "cfg":
                 # CFG 页带未保存修改时保留现值重建 (reload=False) — 见 build_cfg_page
@@ -2400,9 +2399,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             _root.bgcolor = theme.COL_BG
         nav_rail = ft.NavigationRail(selected_index=nav_index,
             label_type=ft.NavigationRailLabelType.ALL,
-            min_width=96, min_extended_width=96,
+            min_width=theme.W_SIDEBAR, min_extended_width=theme.W_SIDEBAR,
             destinations=nav_items, on_change=on_nav_change,
-            bgcolor=theme.COL_BG, group_alignment=-1.0,
+            bgcolor=theme.COL_BG_SIDEBAR, group_alignment=-1.0,
             indicator_color=theme.COL_BRAND_BG_10,
             indicator_shape=ft.RoundedRectangleBorder(radius=theme.RADIUS_CTRL),   # nav-item 4px (Win11 档)
             selected_label_text_style=ft.TextStyle(color=theme.COL_BRAND_SOFT, size=12,
@@ -2415,7 +2414,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                                     on_change=lambda v: _on_enc_change(v))
         status_msg = ft.Text("", size=12, color=theme.COL_ERR)
         status_icon = ft.Icon(ft.Icons.CHECK_CIRCLE, size=15, color=theme.COL_OK)
-        save_btn = ft.FilledButton("保存", icon=ft.Icons.SAVE, on_click=on_save, height=34,
+        save_btn = ft.FilledButton("保存", icon=ft.Icons.SAVE, on_click=on_save, height=theme.H_BTN_BAR,
             style=ft.ButtonStyle(bgcolor=theme.COL_BRAND, color=ft.Colors.WHITE,
                                  shape=ft.RoundedRectangleBorder(radius=theme.RADIUS_CTRL)))
         # 保存语义随当前页切换 (与 on_nav_change._switch 同规则): 换装重建时
@@ -2497,7 +2496,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             if CFG_NAV_INDEX >= 0:
                 nav_content[CFG_NAV_INDEX] = build_cfg_page()
             show_launcher()               # 先切回主页卡(宽屏中居中显示)
-            _animate_window(*WIN_HOME)    # 再收拢窗口包住卡片
+            _animate_window(*theme.WIN_LAUNCHER)    # 再收拢窗口包住卡片
         if st["dirty"] or st["cfg_dirty"]:
             confirm_discard(_go, title="返回启动台",
                             message="配置尚未保存, 返回将丢弃这些修改。")
@@ -2523,8 +2522,8 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
 
     def _do_resize(tw, th, on_done):
         try:
-            w0 = page.window.width or WIN_HOME[0]
-            h0 = page.window.height or WIN_HOME[1]
+            w0 = page.window.width or theme.WIN_LAUNCHER[0]
+            h0 = page.window.height or theme.WIN_LAUNCHER[1]
             l0 = page.window.left if page.window.left is not None else 0
             t0 = page.window.top if page.window.top is not None else 0
             # 多显示器 (deep-review 7轮 F1/F5): 保持当前窗口中心, 不跳回主屏 —
@@ -2535,7 +2534,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 cx, cy = sc if sc else (l0 + w0 / 2, t0 + h0 / 2)
             else:
                 cx, cy = l0 + w0 / 2, t0 + h0 / 2
-            page.window.min_width, page.window.min_height = WIN_MIN
+            page.window.min_width, page.window.min_height = theme.WIN_LAUNCHER
             page.window.width = tw
             page.window.height = th
             page.window.left = round(cx - tw / 2)
@@ -2594,7 +2593,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             else:
                 page.run_thread(_use_default_template)
         threading.Thread(target=_prep, daemon=True).start()
-        _animate_window(*WIN_EDIT, on_done=show_editor)
+        _animate_window(*theme.WIN_EDIT, on_done=show_editor)
 
     # -- 标题栏 --
     # 主页窗口控制 (练枪/主题/配置/─/×) 与 launcher_head 已移入 _rebuild_home()
@@ -2612,7 +2611,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
     # 低调灰底细边框 34px; 保存为 primary 变体主色实心 (主操作突出, 2026-08 UI 审查落地)
     def _bar_btn(text, icon, on_click):
         return ft.OutlinedButton(
-            text, icon=icon, on_click=on_click, height=34,
+            text, icon=icon, on_click=on_click, height=theme.H_BTN_BAR,
             style=ft.ButtonStyle(
                 bgcolor={"": theme.COL_BG_GHOST_2, "hovered": theme.COL_BTN_BAR_HOVER},
                 color=theme.COL_TEXT_SECONDARY,
@@ -2625,7 +2624,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
 
     # 编辑页: ← 返回 + 文件按钮(左) + 保存 + 窗口控制(右)
     # 保存按钮移到顶栏左侧主按钮位 (design-system.md #10: BarButton primary 变体)
-    save_btn = ft.FilledButton("保存", icon=ft.Icons.SAVE, on_click=on_save, height=34,
+    save_btn = ft.FilledButton("保存", icon=ft.Icons.SAVE, on_click=on_save, height=theme.H_BTN_BAR,
         style=ft.ButtonStyle(bgcolor=theme.COL_BRAND, color=ft.Colors.WHITE,
                              shape=ft.RoundedRectangleBorder(radius=theme.RADIUS_CTRL)))
     editor_head = ft.Row([
@@ -2645,7 +2644,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
         content=launcher_head,
         # h=56: HTML 事实源 .titlebar 56px (2026-08 UI 审查对齐; padding 8 上下容纳 40px 窗口按钮)
         padding=ft.padding.Padding(left=16, top=8, right=16, bottom=8),
-        height=56,
+        height=theme.H_TITLEBAR,
         on_tap_down=start_drag)
 
     # -- 导航栏 --
@@ -2655,9 +2654,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
     # expand=True 在 Row 里拉的是横向(rail 变整行空白, 导航项居中浮空) (2026-08 用户反馈)
     nav_rail = ft.NavigationRail(selected_index=0, label_type=ft.NavigationRailLabelType.ALL,
         # w=96: HTML 事实源 .sidebar 96px (2026-08 UI 审查对齐)
-        min_width=96, min_extended_width=96,
+        min_width=theme.W_SIDEBAR, min_extended_width=theme.W_SIDEBAR,
         destinations=nav_items, on_change=on_nav_change,
-        bgcolor=theme.COL_BG, group_alignment=-1.0,   # 显式最顶: 消除剩余顶部 padding (2026-08)
+        bgcolor=theme.COL_BG_SIDEBAR, group_alignment=-1.0,   # 显式最顶: 消除剩余顶部 padding (2026-08)
         # 选中态 = 半透明品牌底 (10%) + 图标/文字变品牌柔色 (design-system #11,
         # HTML 激活项 bg 10% + 左 3px 指示条; 指示条 NavigationRail 无法表达, 用
         # 半透明 indicator 圆角 4px 近似——实心 indicator 会盖住图标 (用户反馈 2026-08),
@@ -2842,7 +2841,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
 
     def enter_avatar(_=None):
         """主页头像点击: 窗口扩到 784×600 + 切修改头像视图"""
-        _animate_window(*WIN_EDIT, on_done=show_avatar)
+        _animate_window(*theme.WIN_EDIT, on_done=show_avatar)
 
     def show_avatar():
         server_epoch["n"] = 0   # 停服务器状态轮询 (修改头像期间不刷主页 UI)
@@ -2858,7 +2857,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
 
     def on_back_avatar(_=None):
         show_launcher()
-        _animate_window(*WIN_HOME)
+        _animate_window(*theme.WIN_LAUNCHER)
 
     def on_avatar_save(_=None):
         d = st["csgo_dir"] or find_csgo_dir() or ""
@@ -2880,7 +2879,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             return
         _flash_status("头像已保存, 重启游戏生效")
         show_launcher()
-        _animate_window(*WIN_HOME)
+        _animate_window(*theme.WIN_LAUNCHER)
 
     def on_avatar_reset(_=None):
         d = st["csgo_dir"] or find_csgo_dir() or ""
@@ -2898,7 +2897,7 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
             pass
         _flash_status("已恢复默认头像")
         show_launcher()
-        _animate_window(*WIN_HOME)
+        _animate_window(*theme.WIN_LAUNCHER)
 
     def _rebuild_avatar_surfaces():
         """创建/重建修改头像页表面 (三轮: 换装后进入头像页配色跟随当前方案)。
@@ -2999,8 +2998,8 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
     page.window.visible = True
     sc = _screen_center()
     if sc:
-        page.window.left = sc[0] - WIN_HOME[0] / 2
-        page.window.top = sc[1] - WIN_HOME[1] / 2
+        page.window.left = sc[0] - theme.WIN_LAUNCHER[0] / 2
+        page.window.top = sc[1] - theme.WIN_LAUNCHER[1] / 2
     page.update()
 
     def _settle_position():
@@ -3026,9 +3025,9 @@ if ($r -eq [System.Windows.Forms.DialogResult]::OK) {
                 s2 = _screen_center()
                 if s2:
                     # 用当前窗口尺寸计算中心: 启动 2s 内用户可能已进编辑页(980×720),
-                    # 硬编码 WIN_HOME 会把宽窗口推偏 (deep-review 4轮 M2)
-                    w = page.window.width or WIN_HOME[0]
-                    h = page.window.height or WIN_HOME[1]
+                    # 硬编码 theme.WIN_LAUNCHER 会把宽窗口推偏 (deep-review 4轮 M2)
+                    w = page.window.width or theme.WIN_LAUNCHER[0]
+                    h = page.window.height or theme.WIN_LAUNCHER[1]
                     page.window.left = round(s2[0] - w / 2)
                     page.window.top = round(s2[1] - h / 2)
                 page.update()
