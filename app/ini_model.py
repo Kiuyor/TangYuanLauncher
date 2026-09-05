@@ -168,9 +168,6 @@ class RevIni:
         if key_lower not in sk:
             sk.append(key_lower)
 
-    def set_bool(self, section: str, key: str, value: bool) -> None:
-        self.set(section, key, "true" if value else "false")
-
     def remove(self, section: str, key: str) -> None:
         sec = section.lower()
         key_lower = key.lower()

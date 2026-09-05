@@ -272,11 +272,3 @@ def apply_values(cfg_dir: str, updates: dict[str, str]) -> dict[str, str]:
 
 # 组名 -> 组标题关键字 (auto.cfg 分节标题, 追加缺失命令的锚点)
 _GROUP_OF = {f.key: gn for gn, fs, _ in GROUPS for f in fs}
-
-
-def cfg_dir_from_csgo(csgo_dir: str | None) -> str | None:
-    """从 CS:GO 根目录推导 cfg 目录 (与 app/locator.find_cfg_dir 一致, 供本模块独立使用)"""
-    if not csgo_dir:
-        return None
-    cand = os.path.join(csgo_dir, "csgo", "cfg")
-    return cand if os.path.isdir(cand) else None
