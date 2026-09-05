@@ -340,6 +340,7 @@ CS:GO nosteam 玩家专用 Windows 桌面启动器,两个核心界面:
 | **theme.COL_BG/COL_CARD 别名须是模块常量** (2.3.0 存量, v2.3.1 修) | 历史别名只写进 `_LIGHT` 覆盖表时,`_DARK` 快照不含它,切回深色残留浅色值(根容器/导航白底白字);夜间定时启动首帧即崩 |
 | **Control 子类禁用 `_values`/`_dirty`/`_frozen` 实例属性名** (2026-08-30 审查) | flet 基类把它们用作响应式存储,`super().__init__()` 会覆盖子类同名属性 — EncGroup 的 `_values` 被换成 dict,`selected` setter 的成员判断静默失真(赋值无声变 no-op)。自定义私有属性加业务前缀(如 `_enc_values`) |
 | **`ft.WindowEventType` 是普通 Enum** (2026-08-30 审查) | `e.type` 是枚举成员,`== "blur"` 字符串比较恒 False;经 `.value` 取值比较(并用 `getattr(t, "value", t)` 兼容裸字符串载荷) |
+| **TextField 无 counter_text 参数** (2026-09-05) | flet 0.86.5 只有 `counter`/`counter_style`;引擎设了 maxLength 必自带 "0/32" 计数器且无法隐藏(字段卡高度差元凶),误传 `counter_text` 构造即 `TypeError` 启动崩 — 此类"构造期才爆"的 kwarg 错误 ruff/导入均不报。`input_dark` 改为引擎不设限、onChange 内手动截断;verify_tools.py 增构造冒烟堵此类回归 |
 
 ---
 
@@ -376,7 +377,7 @@ CS:GO nosteam 玩家专用 Windows 桌面启动器,两个核心界面:
 | 服务器悬停面板 (v2.3.1 二轮) | 主页 ServerPanel: `ft.Stack` 覆盖层锚定胶囊下方(w=264 圆角8); 悬停胶囊 `on_hover` 展开/移出 150ms 收起(Flet 用延迟 Timer); 行悬停显示「进入」`ft.IconButton`(28×28 圆角4, 箭头); 数据 = 状态 API + 预设 sid 映射; 「进入」= 一次性 +connect 启动不改 ConnectServer |
 | 练枪入标题栏 (v2.3.1 二轮) | 主页标题栏 WinBtn 练枪变体(准星图标, tooltip 练枪启动) = `on_launch_click(practice=True)`; 主页卡片四件套回归(头像/昵称/胶囊/启动钮); 直连下拉与自定义服务器弹窗删除 |
 | 服务器监控 | 主页 server-monitor 胶囊: 只显示**主服**(ConnectServer 目标)单服状态(Q4=B); 数据源 = cs.suchitems.top/api/status + 预设 sid 映射; **禁止编造人数**(用户红线); 30s 轮询 |
-| 主题切换 (v2.3.1 收编) | WinBtn 变体(月亮/太阳随当前方案) + ThemeMenu 菜单(深/浅/定时 ✓ 态 + 深色时段设置…);主页+编辑页标题栏, 修改头像页不放(裁剪中换装丢进度);浅色令牌表见 tokens.md §1.8, Flet 侧动态访问 `theme.COL_X`(from-import 冻结深色值) |
+| 主题切换 (v2.3.1 收编) | WinBtn 变体(月亮/太阳随当前方案) + ThemeMenu 菜单(深/浅/定时 ✓ 态 + 深色时段设置…);主页+编辑页标题栏, 修改头像页不放(裁剪中换装丢进度);浅色令牌表见 tokens.md §1.8, Flet 侧动态访问 `theme.COL_X`(from-import 冻结深色值);换装 = 当前视图即时重建(主页整组 / 编辑·头像 `_redress_nonhome()` 就地, 2026-09-05 拷问定稿 — 原"返回主页后应用"惰性策略致配置页切主题不刷新, 已废) |
 | 自定义下拉 (v2.3.1 四轮) | Flet `ui.select_dark` 重构为自绘: 收起=InputDark 同款按钮, 展开=Stack 菜单面板 (卡片底/圆角8/柔影, 选中 brand 底), 箭头旋转+panel-in 150ms; 原生 ft.Dropdown 弹出层弃用 |
 | 动效映射 (v2.3.1 三轮) | Flet: 视图/换装淡入 = AnimatedOpacity+offset (220ms); 面板/弹窗 = AnimatedOpacity + offset(-4px)/scale 0.96 (150ms); 在线点呼吸 = Opacity 循环控制器或 AnimationTicker (唯一循环); 火箭抖动 = rotate/offset 有限次; 全部失败降级即时切换 (rules §4.6) |
 | 表单弹窗 (v2.3.1 收编) | FormDialog 统一形态: AlertDialog(bg `bg-card`, 矩形) + 标题 15/700 + 行 + desc 11px + 取消(TextButton)/保存(FilledButton 主色实心);现役: 深色时段、自定义服务器 |

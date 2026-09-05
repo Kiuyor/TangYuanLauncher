@@ -131,7 +131,7 @@
 - **何时用**: 主页唯一主按钮
 - **何时不用**: 不承载文字;不用作编辑页操作按钮
 - **Flet**: `ft.Container`(110×110 圆, bg `brand` → hover `brand-hover` → busy `launch-busy` → done `launch-done`+`launch-glow`, 居中 Icon rocket 44px 白)。启动中态: 火箭图标 rocket-nudge 旋转抖动 0.45s×2 (有限次非循环, v2.3.1 三轮; offset 分量已降级删去, tokens §7)。hover 上移 -2px 已试做并降级 — offset 位移动画实机破坏 Column 布局 (批次④留档), 保留变色+阴影加深
-- 交互: 点击后依次 busy(1.5s)→ done(4s)→ 复位;期间防重复点击
+- 交互: 点击后依次 busy(1.5s)→ done(4s)→ 复位;期间防重复点击。UAC 提权流程 (2026-09-05): 弹窗前 tooltip「等待管理员确认…」复用 launching 态, 确认后进「启动中…」统一轮询, 取消复位 idle + 状态栏红字 — 按钮不新增状态档
 
 ### 9. 编辑页标题栏 EditTitleBar
 
@@ -190,10 +190,10 @@
 ### 16. 输入框 InputDark
 
 - **用途**: 单行文本输入(昵称/标签/端口等);`mono` 变体用于 IP:端口
-- **Props**: `value`, `placeholder`, `mono`, `multiline`, `height`, `fontSize`, `width`(字段卡内 236), `onChange`, `maxLength`, `textAlign`
+- **Props**: `value`, `placeholder`, `mono`, `multiline`, `height`, `fontSize`, `width`(字段卡内 236), `onChange`, `maxLength`(组件内手动截断, 见 Flet 注), `textAlign`
 - **何时用**: 需文本输入的字段
 - **何时不用**: 选项类用 SelectDark;布尔用 Switch
-- **Flet**: `ui.input_dark()`(组件库实现;圆角 4px (Win11 控件档, v2.3.1), bg `bg-input`, border `border-visible`, focus border `brand`;textarea: multiline 多行 16px mono;**字段卡内高 48px + 字 15px**(v2.3.1 定稿: 64px 框小字头重脚轻, 用户否决过 40px), 弹窗/独立场景 40px 设计高)
+- **Flet**: `ui.input_dark()`(组件库实现;圆角 4px (Win11 控件档, v2.3.1), bg `bg-input`, border `border-visible`, focus border `brand`;textarea: multiline 多行 16px mono;**字段卡内高 48px + 字 15px**(v2.3.1 定稿: 64px 框小字头重脚轻, 用户否决过 40px), 弹窗/独立场景 40px 设计高);**maxLength 不传引擎** — flet 0.86.5 引擎设限必自带 "0/32" 计数器(TextField 无 counter_text 参数, 藏不掉)且误传即启动崩溃, 由组件在 onChange 内截断, 上限语义不变 (2026-09-05)
 
 ### 17. 下拉框 Dropdown(v2.3.1 四轮重构, 原生 select/Dropdown 弃用)
 
@@ -235,7 +235,7 @@
 - **Props**: `catTag`, `risk`(低/中/高 或 low/mid/high), `name`, `onRun`, `expand`(2×2 网格等宽);返回 Container 附带 `_run_btn`/`_status` 引用供驱动状态
 - **何时用**: 修复工具页
 - **何时不用**: 设置字段用 ConfigCard
-- **Flet**: `ui.tool_card()`(padding 16, 圆角 8px (Win11 卡片档, v2.3.1), bg `bg-card`, border `border-subtle`;hover border `border-brand`;内部组合 CatTag + RiskTag + RunButton + ToolStatus)
+- **Flet**: `ui.tool_card()`(padding 16, 圆角 8px (Win11 卡片档, v2.3.1), bg `bg-card`, border `border-subtle`;hover border `border-brand`;内部组合 CatTag + RiskTag + RunButton + ToolStatus);2×2 网格行列距均 space-10(tokens.md §4, 2026-09-05 补齐 — 原 ListView 漏传 spacing 两行卡片贴死)
 
 ### 22. 类别标签 CatTag
 
