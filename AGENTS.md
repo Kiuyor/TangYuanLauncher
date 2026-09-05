@@ -12,6 +12,7 @@ CS:GO 配置编辑器，Flet 桌面应用，面向陌生人公开分发"装完�
 - 不覆盖原件，新方案与旧文件并存（newloader.exe 的教训）
 - 重启 flet 调试前必须连杀所有 `python main.py` 僵尸实例，否则点击失效
 - 外部可能并发改 HTML：编辑 `docs/preview v1.html` 前先重读 + md5 核对
+- 模块文档纪律（2026-09-05）：模块公开接口/行为/坑位变更，当轮同步 `docs/module/<module>.md` 并更新文头「最后核对」日期（索引与依赖图在 `docs/module/README.md`）
 
 ## 布局参考
 - CFG 配置页 = 导航第 4 项，表单化（s0up 预设 auto/crosshair.cfg）
