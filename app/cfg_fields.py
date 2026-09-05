@@ -252,8 +252,20 @@ def apply_values(cfg_dir: str, updates: dict[str, str]) -> dict[str, str]:
             for anchor, ins_lines in sorted(insertions, key=lambda x: -x[0]):
                 lines[anchor:anchor] = ins_lines
                 n_changed += len(ins_lines)
-        with open(path, "w", encoding="utf-8", newline="") as f:
-            f.writelines(lines)
+        # 原子写 tmp + os.replace (2026-09-05 审查, 与 ini_model.save 一致):
+        # 直写会先截断目标, 中途被杀/杀软锁定留半个 cfg
+        tmp = path + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8", newline="") as f:
+                f.writelines(lines)
+            os.replace(tmp, path)
+        except OSError:
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except OSError:
+                pass
+            raise
         changed[path] = str(n_changed)
     return changed
 

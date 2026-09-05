@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """内置工具回归验证 (ad-hoc, 非测试套件)
 
-用法: .venv311/Scripts/python.exe scripts/verify_tools.py
+用法: .venv/Scripts/python.exe scripts/verify_tools.py
 覆盖: newloader.exe 安装(不覆盖原件/幂等) / 工具元数据 / 启动优先逻辑 / ruff 基线
 """
 import os
@@ -188,21 +188,40 @@ def main():
           str(res[-1] if res else None))
     shutil.rmtree(tmp4)
 
-    # --- 工具元数据 ---
-    t = next((t for t in REPAIR_TOOLS if t.name.startswith("安装优化")), None)
-    check("loader tool found", t is not None)
-    check("risk=低", t is not None and t.risk == "低")
-    check("desc mentions newloader.exe", "newloader.exe" in t.desc)
+    # --- 工具元数据 (2026-09-05: 「安装优化 Loader」手动工具已删,
+    #     newloader 由启动链自动就位, _install_loader 函数级测试仍在上文) ---
+    check("loader tool removed from tool page",
+          next((t for t in REPAIR_TOOLS if t.name.startswith("安装优化")), None) is None)
 
     # --- 启动优先逻辑 (闭包不易单测, 静态确认 + 导入) ---
     with open(os.path.join(PROJ, "flet_app", "main.py"), encoding="utf-8") as f:
         src = f.read()
     check("launch prefers newloader.exe",
           'os.path.isfile(os.path.join(d, "newloader.exe"))' in src)
+    check("launch auto-installs newloader (silent)", "_install_loader(d, None)" in src)
     check("Popen uses loader_exe", "subprocess.Popen([loader_exe]" in src)
 
     import flet_app.main  # noqa: F401 - 模块级导入即冒烟
     check("flet_app.main imports", True)
+
+    # --- UI 构造冒烟: input_dark + max_length (2026-09-05 counter_text 启动崩溃回归:
+    #     传给 flet 控件的不存在 kwarg 只在构造时爆 TypeError, ruff/导入均不报) ---
+    import flet as ft
+
+    from flet_app.components import ui as _ui
+    _cb = []
+    _f = _ui.input_dark(value="", max_length=4, on_change=lambda e: _cb.append(e.control.value))
+    check("input_dark constructs (kwarg 兼容)", isinstance(_f, ft.TextField))
+    check("engine max_length unset (计数器来源已移除)", _f.max_length is None)
+
+    class _Ev:
+        pass
+    _ev = _Ev()
+    _ev.control = _f
+    _f.value = "123456"
+    _f.on_change(_ev)   # 未挂 page, update() 的 RuntimeError 必须被包装层吞掉
+    check("max_length manually truncated", _f.value == "1234" and _cb == ["1234"],
+          f"value={_f.value!r} cb={_cb}")
 
     # --- ruff: 全库 0 错误 (质量门, 2026-08 审计清零后由"基线 31"收紧) ---
     r = subprocess.run([sys.executable, "-m", "ruff", "check",

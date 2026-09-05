@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>方向 F · 街机 — 汤圆启动器放飞批次</title>
+<style>
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:400; src:url('../fonts/sc/HarmonyOS_SansSC_Regular.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:500; src:url('../fonts/sc/HarmonyOS_SansSC_Medium.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:700; src:url('../fonts/sc/HarmonyOS_SansSC_Bold.woff2') format('woff2'); }
+  :root {
+    --bg:#150b26; --backdrop:#0b0512;
+    --panel:#1e1136; --panel2:#2a1850;
+    --ink:#f4edff; --ink2:#c9b8ec; --ink3:#8a76b8;
+    --hot:#ff2d78; --cool:#29e6d2; --gold:#ffc93c;
+    --edge:#000000;
+    --scan:rgba(0,0,0,.28);
+  }
+  html[data-scheme="light"] {
+    --bg:#faf3e3; --backdrop:#eadfc6;
+    --panel:#fffaf0; --panel2:#f3e6c8;
+    --ink:#241243; --ink2:#4e3a78; --ink3:#9a8ab8;
+    --hot:#e01e60; --cool:#0aa894; --gold:#d99e00;
+    --edge:#241243;
+    --scan:rgba(36,18,67,.06);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; }
+  body { background:var(--backdrop); font-family:"HarmonyOS Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+    display:flex; align-items:center; justify-content:center; color:var(--ink); }
+  .mono { font-family:"JetBrains Mono",Consolas,monospace; }
+  svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-0.15em; flex-shrink:0; }
+
+  /* CRT 扫描线（静态覆盖层） */
+  .crt { position:fixed; inset:0; pointer-events:none; z-index:5;
+    background:repeating-linear-gradient(0deg, var(--scan) 0 2px, transparent 2px 4px); }
+
+  .win { width:360px; height:510px; background:var(--bg); border:4px solid var(--edge); position:relative;
+    display:flex; flex-direction:column; overflow:hidden; box-shadow:10px 10px 0 rgba(0,0,0,.4); }
+  .toggle { position:fixed; top:10px; right:12px; z-index:9; height:28px; padding:0 12px; border:2px solid var(--edge);
+    background:var(--gold); color:#241243; font-size:12px; font-weight:700; cursor:pointer; box-shadow:3px 3px 0 var(--edge); }
+  .caption { position:fixed; bottom:12px; left:0; right:0; text-align:center; font-size:11px; color:var(--ink3); user-select:none; z-index:6; }
+
+  /* 跑马灯条纹 */
+  .marquee { height:10px; flex-shrink:0;
+    background:repeating-linear-gradient(45deg, var(--hot) 0 14px, var(--cool) 14px 28px); }
+
+  /* 顶部招牌 */
+  .head { padding:14px 16px 10px; display:flex; align-items:center; justify-content:space-between; }
+  .logo { display:flex; flex-direction:column; gap:2px; }
+  .logo .cn { font-size:22px; font-weight:700; letter-spacing:2px;
+    text-shadow:3px 3px 0 var(--hot); }
+  html[data-scheme="light"] .logo .cn { text-shadow:2px 2px 0 rgba(224,30,96,.35); }
+  .logo .en { font-size:9px; letter-spacing:4px; color:var(--cool); }
+  .coin { text-align:right; }
+  .coin .c1 { font-size:11px; color:var(--gold); font-weight:700; }
+  .coin .c2 { font-size:9px; color:var(--ink3); margin-top:2px; }
+
+  /* 玩家卡（像素框） */
+  .player { margin:4px 16px 0; background:var(--panel); border:3px solid var(--edge); box-shadow:5px 5px 0 var(--edge);
+    padding:12px; display:flex; align-items:center; gap:12px; }
+  .ava { width:56px; height:56px; flex-shrink:0; cursor:pointer; background:var(--panel2); border:3px solid var(--cool);
+    display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; color:var(--cool);
+    transition:border-color 150ms steps(2); }
+  .ava:hover { border-color:var(--hot); }
+  .pm { flex:1; }
+  .pm .n { font-size:18px; font-weight:700; }
+  .pm .s { margin-top:4px; font-size:10px; color:var(--ink3); display:flex; align-items:center; gap:6px; }
+  .pm .s .life { color:var(--hot); letter-spacing:2px; }
+  .winbtns { display:flex; flex-direction:column; gap:2px; }
+  .wb { width:22px; height:18px; display:flex; align-items:center; justify-content:center; color:var(--ink3); font-size:10px; cursor:pointer; }
+  .wb:hover { color:var(--hot); }
+
+  /* RANKING 表 */
+  .rank { margin:12px 16px 0; }
+  .rank-title { display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; letter-spacing:3px; color:var(--gold); margin-bottom:8px; }
+  .rank-title::after { content:""; flex:1; height:3px; background:repeating-linear-gradient(90deg, var(--gold) 0 8px, transparent 8px 14px); opacity:.5; }
+  .rrow { display:flex; align-items:center; gap:9px; padding:8px 10px; margin-bottom:6px;
+    background:var(--panel); border:2px solid var(--edge); box-shadow:4px 4px 0 var(--edge); cursor:default;
+    transition:transform 120ms steps(2); }
+  .rrow:hover { transform:translate(-2px,-2px); box-shadow:6px 6px 0 var(--edge); }
+  .rrow .pos { font-size:12px; font-weight:700; color:var(--cool); }
+  .rrow .nm { font-size:13px; font-weight:500; }
+  .rrow.off .nm, .rrow.off .sc { color:var(--ink3); }
+  .rrow .sc { margin-left:auto; font-size:11px; color:var(--ink2); }
+  .rrow .go { font-size:10px; color:var(--hot); opacity:0; transition:opacity 120ms steps(2); }
+  .rrow:hover .go { opacity:1; }
+
+  /* PRESS START */
+  .start { margin-top:auto; padding:0 16px 16px; }
+  .btn-start { height:58px; background:var(--hot); border:3px solid var(--edge); box-shadow:6px 6px 0 var(--edge);
+    display:flex; align-items:center; justify-content:center; gap:10px; cursor:pointer;
+    color:#fff; font-size:17px; font-weight:700; letter-spacing:3px;
+    transition:transform 120ms steps(2), box-shadow 120ms steps(2); }
+  html[data-scheme="light"] .btn-start { color:#fff; }
+  .btn-start:hover { transform:translate(-2px,-2px); box-shadow:8px 8px 0 var(--edge); }
+  .btn-start:active { transform:translate(3px,3px); box-shadow:2px 2px 0 var(--edge); }
+  .btn-start .blink { animation:blink-hard 1s steps(1) infinite; }
+  @keyframes blink-hard { 0%,100% { opacity:1; } 50% { opacity:0; } }
+  .insert { text-align:center; margin-top:9px; font-size:10px; color:var(--ink3); letter-spacing:2px; }
+  .insert b { color:var(--gold); font-weight:500; }
+</style>
+</head>
+<body>
+<div class="crt"></div>
+<button class="toggle" onclick="var h=document.documentElement; h.getAttribute('data-scheme')==='light' ? h.removeAttribute('data-scheme') : h.setAttribute('data-scheme','light'); this.textContent = h.getAttribute('data-scheme')==='light' ? '深色' : '浅色';">浅色</button>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"/></symbol>
+  <symbol id="i-crosshair" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+</svg>
+
+<div class="win">
+  <div class="marquee"></div>
+
+  <div class="head">
+    <div class="logo">
+      <span class="cn">汤圆启动器</span>
+      <span class="en mono">TANGYUAN LAUNCHER</span>
+    </div>
+    <div class="coin">
+      <div class="c1 mono">CREDIT 01</div>
+      <div class="c2 mono">v1.35.4.2</div>
+    </div>
+  </div>
+
+  <div class="player">
+    <div class="ava" title="修改头像">汤</div>
+    <div class="pm">
+      <div class="n">米汤 <span class="mono" style="font-size:10px;color:var(--cool)">1P</span></div>
+      <div class="s mono">READY <span class="life">▲▲▲</span></div>
+    </div>
+    <div class="winbtns">
+      <div class="wb" title="练枪"><svg class="ic"><use href="#i-crosshair"/></svg></div>
+      <div class="wb"><svg class="ic"><use href="#i-minus"/></svg></div>
+      <div class="wb"><svg class="ic"><use href="#i-x"/></svg></div>
+    </div>
+  </div>
+
+  <div class="rank">
+    <div class="rank-title">RANKING · 服务器</div>
+    <div class="rrow">
+      <span class="pos mono">1P</span><span class="nm">未烬社区服</span>
+      <span class="sc mono">12/32</span><span class="go mono">JOIN ▸</span>
+    </div>
+    <div class="rrow off">
+      <span class="pos mono">2P</span><span class="nm">未烬练枪服</span>
+      <span class="sc mono">-----</span><span class="go mono">JOIN ▸</span>
+    </div>
+  </div>
+
+  <div class="start">
+    <div class="btn-start"><svg class="ic"><use href="#i-play"/></svg>PRESS START · 启动<span class="blink">▮</span></div>
+    <div class="insert mono">INSERT COIN <b>任意键</b> CONTINUE ▸ 9</div>
+  </div>
+</div>
+
+<div class="caption">方向 F · 街机 — CRT 扫描线 · 洋红×电青硬阴影 · PRESS START · 右上切换深浅</div>
+</body>
+</html>

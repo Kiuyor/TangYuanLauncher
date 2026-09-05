@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>方向 A · 雾面 — 汤圆启动器大改方向稿</title>
+<style>
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:400; src:url('../fonts/sc/HarmonyOS_SansSC_Regular.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:500; src:url('../fonts/sc/HarmonyOS_SansSC_Medium.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:700; src:url('../fonts/sc/HarmonyOS_SansSC_Bold.woff2') format('woff2'); }
+  :root {
+    --bg:#0d1017; --backdrop:#07090d;
+    --wash1:rgba(94,138,196,.16); --wash2:rgba(128,108,196,.10);
+    --panel:rgba(255,255,255,.055); --panel-strong:rgba(255,255,255,.09);
+    --stroke:rgba(255,255,255,.10); --stroke-soft:rgba(255,255,255,.06);
+    --ink:#eef3fa; --ink2:#b9c4d4; --ink3:#7f8ca0;
+    --acc:#8ab6e8; --acc-deep:#5e93cf; --acc-soft:rgba(138,182,232,.16);
+    --ok:#39c98e; --ok-soft:rgba(57,201,142,.14);
+    --shadow:0 24px 70px rgba(0,0,0,.55);
+  }
+  html[data-scheme="light"] {
+    --bg:#e9eef6; --backdrop:#cfd8e4;
+    --wash1:rgba(94,138,196,.20); --wash2:rgba(128,108,196,.12);
+    --panel:rgba(255,255,255,.62); --panel-strong:rgba(255,255,255,.85);
+    --stroke:rgba(28,40,60,.12); --stroke-soft:rgba(28,40,60,.07);
+    --ink:#1b2532; --ink2:#3d4a5c; --ink3:#71809a;
+    --acc:#3f74b8; --acc-deep:#33619f; --acc-soft:rgba(63,116,184,.12);
+    --ok:#149a6c; --ok-soft:rgba(20,154,108,.12);
+    --shadow:0 24px 70px rgba(28,40,60,.28);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; }
+  body {
+    background:var(--backdrop);
+    font-family:"HarmonyOS Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+    display:flex; align-items:center; justify-content:center; color:var(--ink);
+  }
+  .mono { font-family:"JetBrains Mono",Consolas,monospace; }
+  svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-0.15em; flex-shrink:0; }
+
+  /* ===== 窗口 ===== */
+  .win {
+    width:360px; height:510px; border-radius:10px; overflow:hidden; position:relative;
+    background:
+      radial-gradient(120% 70% at 12% -8%, var(--wash1), transparent 60%),
+      radial-gradient(110% 65% at 100% 108%, var(--wash2), transparent 62%),
+      var(--bg);
+    border:1px solid var(--stroke); box-shadow:var(--shadow);
+    display:flex; flex-direction:column;
+  }
+  .toggle { position:fixed; top:10px; right:12px; z-index:9; height:28px; padding:0 12px; border-radius:6px;
+    border:1px solid var(--stroke); background:var(--panel); color:var(--ink2); font-size:12px; cursor:pointer; }
+  .caption { position:fixed; bottom:12px; left:0; right:0; text-align:center; font-size:11px; color:var(--ink3); user-select:none; }
+
+  /* ===== 标题栏（亚克力浮层） ===== */
+  .titlebar { height:52px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 12px 0 14px;
+    border-bottom:1px solid var(--stroke-soft); background:var(--panel); backdrop-filter:blur(14px); }
+  .brand { display:flex; align-items:center; gap:8px; }
+  .brand-dot { width:8px; height:8px; border-radius:50%; background:var(--acc); }
+  .brand-name { font-size:14px; font-weight:700; }
+  .ver { font-size:10px; padding:2px 7px; border-radius:999px; background:var(--acc-soft); color:var(--acc); border:1px solid var(--stroke-soft); }
+  .winbtns { display:flex; gap:4px; }
+  .wb { width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center;
+    color:var(--ink3); font-size:13px; cursor:pointer; transition:background-color 180ms cubic-bezier(.4,0,.2,1), color 180ms cubic-bezier(.4,0,.2,1); }
+  .wb:hover { background:var(--panel-strong); color:var(--ink); }
+
+  /* ===== 主体 ===== */
+  .body { flex:1; display:flex; flex-direction:column; padding:16px 18px; gap:12px; }
+
+  /* 身份区 */
+  .identity { display:flex; flex-direction:column; align-items:center; gap:0; }
+  .avatar { width:84px; height:84px; border-radius:50%; cursor:pointer; position:relative;
+    background:linear-gradient(150deg, var(--acc-soft), transparent), var(--panel-strong);
+    border:1px solid var(--stroke); display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 5px var(--panel); transition:border-color 180ms cubic-bezier(.4,0,.2,1); }
+  .avatar:hover { border-color:var(--acc); }
+  .avatar span { font-size:30px; font-weight:700; color:var(--acc); }
+  .nickname { margin-top:10px; font-size:20px; font-weight:700; }
+  .presence { margin-top:3px; font-size:11px; color:var(--ink3); display:flex; align-items:center; gap:5px; }
+  .presence .dot { width:6px; height:6px; border-radius:50%; background:var(--ok); animation:dot-breathe 2s ease-in-out infinite; }
+
+  /* 服务器卡（可见列表，替代隐藏胶囊） */
+  .server-card { border-radius:10px; background:var(--panel); border:1px solid var(--stroke-soft); padding:6px; }
+  .sc-head { display:flex; align-items:center; justify-content:space-between; padding:4px 8px 6px; }
+  .sc-title { font-size:11px; color:var(--ink3); letter-spacing:1px; }
+  .sc-count { font-size:10px; color:var(--ink3); }
+  .sc-row { display:flex; align-items:center; gap:8px; padding:7px 8px; border-radius:6px; cursor:default; transition:background-color 150ms cubic-bezier(.4,0,.2,1); }
+  .sc-row:hover { background:var(--panel-strong); }
+  .sc-dot { width:6px; height:6px; border-radius:50%; background:var(--ink3); flex-shrink:0; }
+  .sc-dot.on { background:var(--ok); box-shadow:0 0 0 3px var(--ok-soft); }
+  .sc-name { font-size:13px; font-weight:500; }
+  .sc-count-n { margin-left:auto; font-size:11px; color:var(--ink3); }
+  .sc-enter { width:22px; height:22px; border-radius:5px; display:flex; align-items:center; justify-content:center;
+    color:var(--ink3); font-size:12px; opacity:0; transition:opacity 150ms cubic-bezier(.4,0,.2,1); }
+  .sc-row:hover .sc-enter { opacity:1; }
+  .sc-row.off { opacity:.55; }
+
+  /* 启动区 */
+  .launch { margin-top:auto; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .btn-launch { width:84px; height:84px; border-radius:50%; cursor:pointer; position:relative;
+    background:linear-gradient(160deg, var(--acc), var(--acc-deep));
+    border:1px solid rgba(255,255,255,.22);
+    display:flex; align-items:center; justify-content:center; color:#fff; font-size:30px;
+    box-shadow:0 10px 26px rgba(8,12,20,.45);
+    transition:transform 220ms cubic-bezier(.4,0,.2,1), box-shadow 220ms cubic-bezier(.4,0,.2,1); }
+  html[data-scheme="light"] .btn-launch { border-color:rgba(255,255,255,.35); box-shadow:0 10px 26px rgba(28,40,60,.25); }
+  .btn-launch:hover { transform:translateY(-2px); }
+  .btn-launch:active { transform:translateY(0) scale(.98); }
+  .launch-label { font-size:12px; font-weight:500; color:var(--ink2); }
+
+  /* 底部快捷 */
+  .quick { display:flex; gap:8px; }
+  .qb { flex:1; height:34px; border-radius:6px; display:flex; align-items:center; justify-content:center; gap:6px;
+    font-size:12px; font-weight:500; color:var(--ink2); background:var(--panel); border:1px solid var(--stroke-soft); cursor:pointer;
+    transition:background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1); }
+  .qb:hover { background:var(--panel-strong); color:var(--ink); }
+
+  @keyframes dot-breathe { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+</style>
+</head>
+<body>
+<button class="toggle" onclick="var h=document.documentElement; h.getAttribute('data-scheme')==='light' ? h.removeAttribute('data-scheme') : h.setAttribute('data-scheme','light'); this.textContent = h.getAttribute('data-scheme')==='light' ? '深色' : '浅色';">浅色</button>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+  <symbol id="i-crosshair" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+</svg>
+
+<div class="win">
+  <div class="titlebar">
+    <div class="brand"><span class="brand-dot"></span><span class="brand-name">汤圆启动器</span><span class="ver mono">v1.35.4.2</span></div>
+    <div class="winbtns">
+      <div class="wb" title="练枪启动"><svg class="ic"><use href="#i-crosshair"/></svg></div>
+      <div class="wb" title="配置"><svg class="ic"><use href="#i-gear"/></svg></div>
+      <div class="wb"><svg class="ic"><use href="#i-minus"/></svg></div>
+      <div class="wb"><svg class="ic"><use href="#i-x"/></svg></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="identity">
+      <div class="avatar" title="修改头像"><span>汤</span></div>
+      <div class="nickname">米汤</div>
+      <div class="presence"><span class="dot"></span>就绪 · 可启动</div>
+    </div>
+
+    <div class="server-card">
+      <div class="sc-head"><span class="sc-title">服务器</span><span class="sc-count mono">2</span></div>
+      <div class="sc-row">
+        <span class="sc-dot on"></span><span class="sc-name">未烬社区服</span>
+        <span class="sc-count-n mono">12/32</span>
+        <span class="sc-enter"><svg class="ic"><use href="#i-right"/></svg></span>
+      </div>
+      <div class="sc-row off">
+        <span class="sc-dot"></span><span class="sc-name">未烬练枪服</span>
+        <span class="sc-count-n mono">离线</span>
+        <span class="sc-enter"><svg class="ic"><use href="#i-right"/></svg></span>
+      </div>
+    </div>
+
+    <div class="launch">
+      <div class="btn-launch" title="启动游戏"><svg class="ic"><use href="#i-rocket"/></svg></div>
+      <div class="launch-label">启动游戏</div>
+    </div>
+
+    <div class="quick">
+      <div class="qb"><svg class="ic"><use href="#i-crosshair"/></svg>练枪模式</div>
+      <div class="qb"><svg class="ic"><use href="#i-folder"/></svg>游戏目录</div>
+    </div>
+  </div>
+</div>
+
+<div class="caption">方向 A · 雾面 — 亚克力层次 · 冷调蓝灰 · 悬停服务器行可进入 · 右上角切换深浅</div>
+</body>
+</html>

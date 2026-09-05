@@ -108,7 +108,7 @@ while time.perf_counter() < t_end:
             buf = ctypes.create_unicode_buffer(256)
             user32.GetWindowTextW(h, buf, 256)
             t = buf.value
-            if t and ("Rev.Ini" in t or "汤圆" in t or "CS:GO" in t):
+            if t and ("Tangyuan" in t or "Rev.Ini" in t or "汤圆" in t or "CS:GO" in t):
                 found[0] = (h, t)  # noqa: B023 - 同步回调, 循环内立即消费当前 found
                 return False  # 命中目标, 停止枚举
         return True

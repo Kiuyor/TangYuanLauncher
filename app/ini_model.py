@@ -5,6 +5,7 @@ rev.ini 解析 / 序列化模型
 """
 from __future__ import annotations
 
+import os
 import shutil
 import warnings
 from dataclasses import dataclass, field
@@ -273,7 +274,10 @@ class RevIni:
         """保存文件。encoding: 'utf-8' 或 'gbk'。
         revLoader 按 ANSI(GBK)读配置,中文名建议用 gbk。
         未知编码直接报错 (L1): 静默回退 UTF-8 会把 GBK 文件写成 UTF-8,
-        导致 revLoader 端中文昵称乱码且无任何提示。"""
+        导致 revLoader 端中文昵称乱码且无任何提示。
+        原子写 tmp + os.replace (2026-08-30 审查, 与 avatar/settings 一致):
+        原 open(wb) 直写会先截断目标, 中途被杀/杀软锁定留半个 rev.ini;
+        失败时目标文件保持原样。"""
         if encoding not in SUPPORTED_ENCODINGS:
             raise ValueError(
                 f"不支持的编码: {encoding!r}, 仅支持 {'/'.join(SUPPORTED_ENCODINGS)}")
@@ -283,8 +287,18 @@ class RevIni:
         if self.trailing_newline:
             text += self.line_ending
         data = encode_ini_text(text, encoding)
-        with open(path, "wb") as f:
-            f.write(data)
+        tmp = path + ".tmp"
+        try:
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, path)
+        except OSError:
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except OSError:
+                pass
+            raise
 
     # ---------- 备份 ----------
     @staticmethod

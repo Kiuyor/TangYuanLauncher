@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>方向 G · 大字报 — 汤圆启动器放飞批次</title>
+<style>
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:400; src:url('../fonts/sc/HarmonyOS_SansSC_Regular.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:500; src:url('../fonts/sc/HarmonyOS_SansSC_Medium.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:700; src:url('../fonts/sc/HarmonyOS_SansSC_Bold.woff2') format('woff2'); }
+  :root {
+    --paper:#f4f1ea; --backdrop:#dcd7cb;
+    --ink:#16130e; --ink2:#57503f; --ink3:#948b76;
+    --red:#e03a1e; --red-deep:#c22c12;
+    --hairline:rgba(22,19,14,.14);
+  }
+  html[data-scheme="light"] { /* G 浅色优先；深色用 data-scheme="dark" */ }
+  html[data-scheme="dark"] {
+    --paper:#16130e; --backdrop:#0b0a07;
+    --ink:#f4f1ea; --ink2:#b5ad99; --ink3:#7a715c;
+    --red:#ff4a2a; --red-deep:#d63a1e;
+    --hairline:rgba(244,241,234,.16);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; }
+  body { background:var(--backdrop); font-family:"HarmonyOS Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+    display:flex; align-items:center; justify-content:center; color:var(--ink); }
+  .mono { font-family:"JetBrains Mono",Consolas,monospace; }
+  svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-0.15em; flex-shrink:0; }
+
+  .win { width:360px; height:510px; background:var(--paper); position:relative; overflow:hidden;
+    display:flex; box-shadow:0 24px 60px rgba(0,0,0,.35); }
+
+  .toggle { position:fixed; top:10px; right:12px; z-index:9; height:28px; padding:0 12px;
+    border:1px solid var(--ink); background:var(--paper); color:var(--ink); font-size:12px; cursor:pointer; }
+  .caption { position:fixed; bottom:12px; left:0; right:0; text-align:center; font-size:11px; color:var(--ink3); user-select:none; }
+
+  /* ===== 左半：巨型字 + 印章 ===== */
+  .hero { width:172px; flex-shrink:0; position:relative; border-right:1px solid var(--hairline); }
+  .giant { position:absolute; left:-14px; top:34px; width:190px; font-size:168px; line-height:.95; font-weight:700; color:var(--ink);
+    letter-spacing:-6px; user-select:none; }
+  .giant .fill { color:var(--red); }
+  .vert { position:absolute; top:18px; right:12px; writing-mode:vertical-rl; font-size:11px; letter-spacing:6px; color:var(--ink2); }
+  .stamp { position:absolute; left:20px; bottom:34px; width:60px; height:60px; background:var(--red); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; color:var(--paper); font-size:24px; font-weight:700;
+    transform:rotate(-6deg); box-shadow:4px 4px 0 rgba(0,0,0,.18);
+    transition:transform 200ms cubic-bezier(.4,0,.2,1); }
+  .stamp:hover { transform:rotate(-2deg) scale(1.04); }
+  .stamp-tag { position:absolute; left:22px; bottom:12px; font-size:9px; letter-spacing:2px; color:var(--ink3); white-space:nowrap; }
+
+  /* ===== 右半：内容列 ===== */
+  .col { flex:1; display:flex; flex-direction:column; padding:20px 18px 18px; position:relative; }
+  .plus { position:absolute; color:var(--ink3); font-size:10px; user-select:none; }
+  .plus.p1 { top:8px; left:8px; } .plus.p2 { top:8px; right:8px; }
+  .plus.p3 { bottom:8px; left:8px; } .plus.p4 { bottom:8px; right:8px; }
+
+  .kicker { font-size:10px; letter-spacing:4px; color:var(--red); font-weight:700; }
+  .who { margin-top:8px; padding-bottom:14px; border-bottom:1px solid var(--hairline); }
+  .who .n { font-size:26px; font-weight:700; letter-spacing:2px; }
+  .who .d { margin-top:4px; font-size:10px; color:var(--ink3); letter-spacing:1px; }
+
+  .sect { margin-top:16px; display:flex; align-items:baseline; gap:8px; }
+  .sect .no { font-size:11px; color:var(--red); font-weight:700; }
+  .sect .t { font-size:11px; letter-spacing:3px; color:var(--ink2); font-weight:500; }
+  .srv { display:flex; align-items:baseline; gap:8px; padding:9px 0; border-bottom:1px solid var(--hairline); cursor:default; }
+  .srv .idx { font-size:11px; color:var(--ink3); }
+  .srv .nm { font-size:14px; font-weight:500; white-space:nowrap; }
+  .srv .st { margin-left:auto; font-size:10px; color:var(--ink3); }
+  .srv.on .st { color:var(--red); font-weight:700; }
+  .srv .enter { font-size:10px; color:var(--red); opacity:0; transition:opacity 150ms cubic-bezier(.4,0,.2,1); }
+  .srv:hover .enter { opacity:1; }
+
+  .go { margin-top:auto; }
+  .btn-go { height:56px; background:var(--red); color:var(--paper); cursor:pointer; border:none; width:100%;
+    display:flex; align-items:center; justify-content:space-between; padding:0 16px;
+    transition:background-color 180ms cubic-bezier(.4,0,.2,1), transform 120ms cubic-bezier(.4,0,.2,1); }
+  .btn-go:hover { background:var(--red-deep); }
+  .btn-go:active { transform:translateY(1px); }
+  .btn-go .zh { font-size:16px; font-weight:700; letter-spacing:4px; display:flex; align-items:center; gap:8px; white-space:nowrap; }
+  .btn-go .blink { animation:blink-soft 1.1s steps(1) infinite; }
+  @keyframes blink-soft { 0%,100% { opacity:1; } 50% { opacity:0; } }
+  .btn-go .en { font-size:8px; letter-spacing:1px; opacity:.75; white-space:nowrap; }
+  .foot { margin-top:10px; display:flex; justify-content:space-between; font-size:9px; letter-spacing:2px; color:var(--ink3); }
+</style>
+</head>
+<body>
+<button class="toggle" onclick="var h=document.documentElement; h.getAttribute('data-scheme')==='dark' ? h.removeAttribute('data-scheme') : h.setAttribute('data-scheme','dark'); this.textContent = h.getAttribute('data-scheme')==='dark' ? '浅色' : '深色';">深色</button>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"/></symbol>
+</svg>
+
+<div class="win">
+  <div class="hero">
+    <div class="giant">启<span class="fill">动</span></div>
+    <div class="vert">汤圆启动器 · 一键开战 · 二〇二六</div>
+    <div class="stamp" title="米汤 · 修改头像">汤</div>
+    <div class="stamp-tag">PILOT / 米汤</div>
+  </div>
+
+  <div class="col">
+    <span class="plus p1">+</span><span class="plus p2">+</span><span class="plus p3">+</span><span class="plus p4">+</span>
+
+    <div class="kicker">READY TO DEPLOY</div>
+    <div class="who">
+      <div class="n">米汤</div>
+      <div class="d mono">v1.35.4.2 · PROFILE READY</div>
+    </div>
+
+    <div class="sect"><span class="no">01</span><span class="t">服务器</span></div>
+    <div class="srv on">
+      <span class="idx mono">a.</span><span class="nm">未烬社区服</span>
+      <span class="st mono">12/32</span><span class="enter">进入 ▸</span>
+    </div>
+    <div class="srv">
+      <span class="idx mono">b.</span><span class="nm">未烬练枪服</span>
+      <span class="st mono">离线</span><span class="enter">进入 ▸</span>
+    </div>
+
+    <div class="go">
+      <button class="btn-go"><span class="zh">启动<span class="blink">▮</span></span><span class="en mono">PRESS ▸ csgo.exe</span></button>
+      <div class="foot"><span>练枪 ▸ 游戏目录 ▸ 配置</span><span>s0up ✓</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="caption">方向 G · 大字报 — 瑞士海报×中式印章 · 巨型标题字出血 · 朱红点睛 · 右上切换深浅</div>
+</body>
+</html>

@@ -21,6 +21,16 @@ SETTINGS_PATH = os.path.join(SETTINGS_DIR, "settings.json")
 
 DEFAULTS = {
     "user_csgo_dir": "",   # 用户手动指定的 CS:GO 目录
+    # 主题三态 (v2.3.0): dark | light | scheduled (定时: dark_start-dark_end 时段深色)
+    "theme_mode": "scheduled",
+    "theme_dark_start": "19:00",
+    "theme_dark_end": "07:00",
+    # 服务器直连预设 (v2.3.0): [{name, addr, sid?}]; sid = 状态 API 的服务器 id (可选)
+    "server_presets": [
+        {"name": "十人竞技", "addr": "43.241.51.48:27015", "sid": "phoenix"},
+        {"name": "躲猫猫", "addr": "43.241.51.48:27016", "sid": "zombie"},
+    ],
+    "server_selected": "",  # 主页当前选中服务器 addr; "" = 跟随常用设置 ConnectServer
 }
 
 

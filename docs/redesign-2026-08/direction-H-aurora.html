@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>方向 H · 极光 — 汤圆启动器放飞批次</title>
+<style>
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:400; src:url('../fonts/sc/HarmonyOS_SansSC_Regular.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:500; src:url('../fonts/sc/HarmonyOS_SansSC_Medium.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:700; src:url('../fonts/sc/HarmonyOS_SansSC_Bold.woff2') format('woff2'); }
+  :root {
+    --bg:#0d0b18; --backdrop:#060510;
+    --glass:rgba(255,255,255,.07); --glass-strong:rgba(255,255,255,.12);
+    --stroke:rgba(255,255,255,.16); --stroke-soft:rgba(255,255,255,.08);
+    --ink:#f6f4ff; --ink2:#c6c0e8; --ink3:#8b84b8;
+    --vio:#8b5cf6; --mag:#ec4899; --cyan:#22d3ee;
+    --ok:#34d399;
+  }
+  html[data-scheme="light"] {
+    --bg:#f1eefb; --backdrop:#ded9f0;
+    --glass:rgba(255,255,255,.62); --glass-strong:rgba(255,255,255,.85);
+    --stroke:rgba(80,60,160,.16); --stroke-soft:rgba(80,60,160,.08);
+    --ink:#241d45; --ink2:#4d4377; --ink3:#847ab0;
+    --vio:#7c3aed; --mag:#db2777; --cyan:#0891b2;
+    --ok:#0e9f6e;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; }
+  body { background:var(--backdrop); font-family:"HarmonyOS Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+    display:flex; align-items:center; justify-content:center; color:var(--ink); }
+  .mono { font-family:"JetBrains Mono",Consolas,monospace; }
+  svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-0.15em; flex-shrink:0; }
+
+  .toggle { position:fixed; top:10px; right:12px; z-index:9; height:28px; padding:0 12px; border-radius:999px;
+    border:1px solid var(--stroke); background:var(--glass); color:var(--ink2); font-size:12px; cursor:pointer;
+    backdrop-filter:blur(10px); }
+  .caption { position:fixed; bottom:12px; left:0; right:0; text-align:center; font-size:11px; color:var(--ink3); user-select:none; }
+
+  .win { width:360px; height:510px; border-radius:28px; overflow:hidden; position:relative;
+    background:var(--bg); border:1px solid var(--stroke-soft);
+    box-shadow:0 30px 80px rgba(10,5,40,.55); display:flex; flex-direction:column; }
+  /* 极光 blob（唯一循环动画：缓慢漂移） */
+  .blobs { position:absolute; inset:-40%; filter:blur(60px); opacity:.75; animation:drift 14s ease-in-out infinite alternate; }
+  html[data-scheme="light"] .blobs { opacity:.5; }
+  @keyframes drift {
+    0% { transform:translate(-4%,-3%) rotate(0deg); }
+    100% { transform:translate(4%,3%) rotate(8deg); }
+  }
+  .blob { position:absolute; border-radius:50%; }
+  .blob.b1 { width:300px; height:300px; left:8%; top:6%; background:radial-gradient(circle, var(--vio), transparent 65%); }
+  .blob.b2 { width:260px; height:260px; right:0%; top:34%; background:radial-gradient(circle, var(--mag), transparent 65%); }
+  .blob.b3 { width:280px; height:280px; left:18%; bottom:0%; background:radial-gradient(circle, var(--cyan), transparent 65%); }
+
+  .layer { position:relative; z-index:1; display:flex; flex-direction:column; height:100%; }
+
+  /* 顶部：玻璃标题栏 */
+  .bar { height:56px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 16px;
+    background:var(--glass); backdrop-filter:blur(18px); border-bottom:1px solid var(--stroke-soft); }
+  .brand { display:flex; align-items:center; gap:9px; }
+  .logo-orb { width:20px; height:20px; border-radius:8px;
+    background:conic-gradient(from 210deg, var(--vio), var(--mag), var(--cyan), var(--vio)); }
+  .brand-name { font-size:14px; font-weight:700; }
+  .ver { font-size:10px; padding:3px 9px; border-radius:999px; background:var(--glass-strong); border:1px solid var(--stroke-soft); color:var(--ink3); }
+  .winbtns { display:flex; gap:4px; }
+  .wb { width:28px; height:28px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+    color:var(--ink3); font-size:13px; cursor:pointer; transition:background-color 180ms cubic-bezier(.4,0,.2,1), color 180ms cubic-bezier(.4,0,.2,1); }
+  .wb:hover { background:var(--glass-strong); color:var(--ink); }
+
+  /* 身份岛 */
+  .islands { flex:1; display:flex; flex-direction:column; gap:12px; padding:18px 16px 16px; }
+  .id-island { border-radius:22px; background:var(--glass); backdrop-filter:blur(18px);
+    border:1px solid var(--stroke-soft); padding:16px; display:flex; align-items:center; gap:14px; }
+  .ava { width:62px; height:62px; border-radius:50%; cursor:pointer; position:relative; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700; color:#fff;
+    background:linear-gradient(140deg, var(--vio), var(--mag));
+    box-shadow:0 0 0 3px var(--bg), 0 0 0 4.5px var(--stroke);
+    transition:transform 200ms cubic-bezier(.4,0,.2,1); }
+  .ava:hover { transform:scale(1.05); }
+  .pm { flex:1; }
+  .pm .n { font-size:19px; font-weight:700; }
+  .pm .s { margin-top:3px; font-size:11px; color:var(--ink3); display:flex; align-items:center; gap:5px; }
+  .pm .s .dot { width:6px; height:6px; border-radius:50%; background:var(--ok); }
+  .chev { color:var(--ink3); font-size:13px; }
+
+  /* 服务器岛 */
+  .srv-island { border-radius:22px; background:var(--glass); backdrop-filter:blur(18px);
+    border:1px solid var(--stroke-soft); padding:8px; }
+  .srv-head { padding:6px 10px 6px; font-size:11px; color:var(--ink3); letter-spacing:1px; }
+  .srow { display:flex; align-items:center; gap:10px; padding:10px 10px; border-radius:16px; cursor:default;
+    transition:background-color 150ms cubic-bezier(.4,0,.2,1); }
+  .srow:hover { background:var(--glass-strong); }
+  .srow .halo { width:30px; height:30px; border-radius:12px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .srow.on .halo { background:linear-gradient(140deg, rgba(52,211,153,.25), rgba(34,211,238,.2)); color:var(--ok); }
+  .srow.off .halo { background:var(--glass-strong); color:var(--ink3); }
+  .srow .nm { font-size:13px; font-weight:500; }
+  .srow .cnt { margin-left:auto; font-size:11px; color:var(--ink3); }
+  .srow.off .nm, .srow.off .cnt { color:var(--ink3); }
+
+  /* 启动胶囊 */
+  .btn-launch { margin-top:auto; height:60px; border-radius:999px; cursor:pointer; border:none; width:100%;
+    background:linear-gradient(120deg, var(--vio), var(--mag) 55%, var(--vio));
+    background-size:200% 100%; background-position:0% 0%;
+    color:#fff; font-family:inherit; font-size:16px; font-weight:700; letter-spacing:2px;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    box-shadow:0 14px 34px rgba(139,92,246,.35);
+    transition:background-position 400ms cubic-bezier(.4,0,.2,1), transform 200ms cubic-bezier(.4,0,.2,1), box-shadow 200ms cubic-bezier(.4,0,.2,1); }
+  html[data-scheme="light"] .btn-launch { box-shadow:0 14px 34px rgba(124,58,237,.25); }
+  .btn-launch:hover { background-position:100% 0%; transform:translateY(-2px); }
+  .btn-launch:active { transform:translateY(0) scale(.99); }
+  .quick { display:flex; gap:10px; margin-top:10px; }
+  .qb { flex:1; height:40px; border-radius:999px; border:1px solid var(--stroke-soft);
+    background:var(--glass); backdrop-filter:blur(18px);
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    font-size:12px; font-weight:500; color:var(--ink2); cursor:pointer;
+    transition:background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1); }
+  .qb:hover { background:var(--glass-strong); color:var(--ink); }
+</style>
+</head>
+<body>
+<button class="toggle" onclick="var h=document.documentElement; h.getAttribute('data-scheme')==='light' ? h.removeAttribute('data-scheme') : h.setAttribute('data-scheme','light'); this.textContent = h.getAttribute('data-scheme')==='light' ? '深色' : '浅色';">浅色</button>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+  <symbol id="i-crosshair" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+</svg>
+
+<div class="win">
+  <div class="blobs">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+  </div>
+
+  <div class="layer">
+    <div class="bar">
+      <div class="brand"><span class="logo-orb"></span><span class="brand-name">汤圆启动器</span><span class="ver mono">v1.35.4.2</span></div>
+      <div class="winbtns">
+        <div class="wb" title="配置"><svg class="ic"><use href="#i-gear"/></svg></div>
+        <div class="wb"><svg class="ic"><use href="#i-minus"/></svg></div>
+        <div class="wb"><svg class="ic"><use href="#i-x"/></svg></div>
+      </div>
+    </div>
+
+    <div class="islands">
+      <div class="id-island">
+        <div class="ava" title="修改头像">汤</div>
+        <div class="pm">
+          <div class="n">米汤</div>
+          <div class="s"><span class="dot"></span>就绪 · 今天也想打游戏</div>
+        </div>
+        <span class="chev">›</span>
+      </div>
+
+      <div class="srv-island">
+        <div class="srv-head">服务器</div>
+        <div class="srow on">
+          <span class="halo">▲</span><span class="nm">未烬社区服</span>
+          <span class="cnt mono">12/32</span>
+        </div>
+        <div class="srow off">
+          <span class="halo">—</span><span class="nm">未烬练枪服</span>
+          <span class="cnt mono">离线</span>
+        </div>
+      </div>
+
+      <button class="btn-launch"><svg class="ic"><use href="#i-rocket"/></svg>启动游戏</button>
+      <div class="quick">
+        <div class="qb"><svg class="ic"><use href="#i-crosshair"/></svg>练枪模式</div>
+        <div class="qb"><svg class="ic"><use href="#i-folder"/></svg>游戏目录</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="caption">方向 H · 极光 — 渐变 blob 漂移 · 玻璃浮岛 · 大胶囊渐变启动钮 · 右上切换深浅</div>
+</body>
+</html>

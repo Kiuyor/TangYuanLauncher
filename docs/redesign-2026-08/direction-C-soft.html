@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>方向 C · 软陶 — 汤圆启动器大改方向稿</title>
+<style>
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:400; src:url('../fonts/sc/HarmonyOS_SansSC_Regular.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:500; src:url('../fonts/sc/HarmonyOS_SansSC_Medium.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:700; src:url('../fonts/sc/HarmonyOS_SansSC_Bold.woff2') format('woff2'); }
+  :root {
+    --bg:#f6f1e9; --backdrop:#e5dccc;
+    --card:#fffdf9; --card-2:#f1e9dc;
+    --stroke:rgba(90,70,45,.10); --stroke-soft:rgba(90,70,45,.06);
+    --ink:#3b352c; --ink2:#6b6254; --ink3:#a09580;
+    --acc:#dd6540; --acc-deep:#c95430; --acc-soft:rgba(221,101,64,.10);
+    --ok:#3f9e6e; --ok-soft:rgba(63,158,110,.12);
+    --shadow-card:0 4px 16px rgba(90,60,30,.07);
+    --shadow-win:0 24px 60px rgba(70,45,20,.22);
+  }
+  html[data-scheme="light"] { /* C 为浅色优先设计；data-scheme="light" 时保持浅色，深色用 data-scheme="dark" 反转 */ }
+  html[data-scheme="dark"] {
+    --bg:#24201b; --backdrop:#171411;
+    --card:#2e2922; --card-2:#38322a;
+    --stroke:rgba(240,225,200,.10); --stroke-soft:rgba(240,225,200,.06);
+    --ink:#f0e9df; --ink2:#c4b8a6; --ink3:#8d8171;
+    --acc:#e0754f; --acc-deep:#c95430; --acc-soft:rgba(224,117,79,.14);
+    --ok:#5cb98a; --ok-soft:rgba(92,185,138,.14);
+    --shadow-card:0 4px 16px rgba(0,0,0,.25);
+    --shadow-win:0 24px 60px rgba(0,0,0,.5);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; }
+  body {
+    background:var(--backdrop);
+    font-family:"HarmonyOS Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+    display:flex; align-items:center; justify-content:center; color:var(--ink);
+  }
+  svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-0.15em; flex-shrink:0; }
+
+  .win { width:360px; height:510px; border-radius:16px; overflow:hidden; position:relative;
+    background:var(--bg); border:1px solid var(--stroke-soft); box-shadow:var(--shadow-win);
+    display:flex; flex-direction:column; }
+  .toggle { position:fixed; top:10px; right:12px; z-index:9; height:30px; padding:0 14px; border-radius:999px;
+    border:1px solid var(--stroke); background:var(--card); color:var(--ink2); font-size:12px; cursor:pointer; box-shadow:var(--shadow-card); }
+  .caption { position:fixed; bottom:12px; left:0; right:0; text-align:center; font-size:11px; color:var(--ink3); user-select:none; }
+
+  /* ===== 标题栏 ===== */
+  .titlebar { height:54px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:0 12px 0 18px; }
+  .brand { display:flex; align-items:center; gap:8px; }
+  .brand-name { font-size:14px; font-weight:700; }
+  .ver { font-size:10px; padding:3px 9px; border-radius:999px; background:var(--card-2); color:var(--ink2); }
+  .winbtns { display:flex; gap:4px; }
+  .wb { width:28px; height:28px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+    color:var(--ink3); font-size:13px; cursor:pointer; transition:background-color 180ms cubic-bezier(.4,0,.2,1), color 180ms cubic-bezier(.4,0,.2,1); }
+  .wb:hover { background:var(--card-2); color:var(--ink); }
+
+  /* ===== 主体 ===== */
+  .body { flex:1; display:flex; flex-direction:column; padding:4px 16px 16px; gap:12px; }
+
+  /* 身份卡 */
+  .id-card { border-radius:16px; background:var(--card); border:1px solid var(--stroke-soft); box-shadow:var(--shadow-card);
+    padding:16px; display:flex; align-items:center; gap:14px; }
+  .avatar { width:68px; height:68px; border-radius:50%; cursor:pointer; position:relative; flex-shrink:0;
+    background:linear-gradient(150deg, var(--acc-soft), var(--card-2)); border:1px solid var(--stroke);
+    display:flex; align-items:center; justify-content:center; transition:border-color 180ms cubic-bezier(.4,0,.2,1); }
+  .avatar:hover { border-color:var(--acc); }
+  .avatar span { font-size:24px; font-weight:700; color:var(--acc); }
+  .id-meta { display:flex; flex-direction:column; gap:4px; }
+  .nickname { font-size:20px; font-weight:700; }
+  .edit-link { font-size:11px; color:var(--ink3); cursor:pointer; transition:color 150ms cubic-bezier(.4,0,.2,1); }
+  .edit-link:hover { color:var(--acc); }
+
+  /* 服务器卡 */
+  .srv-card { border-radius:16px; background:var(--card); border:1px solid var(--stroke-soft); box-shadow:var(--shadow-card); padding:8px; }
+  .srv-head { display:flex; align-items:center; justify-content:space-between; padding:6px 10px 4px; }
+  .srv-title { font-size:12px; font-weight:500; color:var(--ink3); }
+  .srv-row { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:12px; cursor:default;
+    transition:background-color 150ms cubic-bezier(.4,0,.2,1); }
+  .srv-row:hover { background:var(--card-2); }
+  .srv-pill { font-size:10px; padding:2px 8px; border-radius:999px; flex-shrink:0; }
+  .srv-pill.on { background:var(--ok-soft); color:var(--ok); }
+  .srv-pill.off { background:var(--card-2); color:var(--ink3); }
+  .srv-name { font-size:13px; font-weight:500; }
+  .srv-n { margin-left:auto; font-size:11px; color:var(--ink3); }
+  .srv-enter { width:24px; height:24px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+    background:var(--acc-soft); color:var(--acc); font-size:12px; opacity:0; transition:opacity 150ms cubic-bezier(.4,0,.2,1); }
+  .srv-row:hover .srv-enter { opacity:1; }
+
+  /* 启动区 */
+  .launch { margin-top:auto; }
+  .btn-launch { height:54px; border-radius:999px; cursor:pointer; position:relative;
+    background:linear-gradient(160deg, var(--acc), var(--acc-deep)); color:#fff;
+    display:flex; align-items:center; justify-content:center; gap:9px; font-size:15px; font-weight:700;
+    box-shadow:0 10px 24px rgba(190,85,50,.30);
+    transition:transform 220ms cubic-bezier(.4,0,.2,1), box-shadow 220ms cubic-bezier(.4,0,.2,1); }
+  html[data-scheme="dark"] .btn-launch { box-shadow:0 10px 24px rgba(0,0,0,.35); }
+  .btn-launch:hover { transform:translateY(-2px); }
+  .btn-launch:active { transform:translateY(0) scale(.99); }
+  .btn-launch .ic { font-size:17px; }
+  .quick { display:flex; gap:8px; margin-top:10px; }
+  .qb { flex:1; height:38px; border-radius:999px; display:flex; align-items:center; justify-content:center; gap:6px;
+    font-size:12px; font-weight:500; color:var(--ink2); background:var(--card-2); cursor:pointer;
+    transition:background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1); }
+  .qb:hover { background:var(--acc-soft); color:var(--acc); }
+</style>
+</head>
+<body>
+<button class="toggle" onclick="var h=document.documentElement; h.getAttribute('data-scheme')==='dark' ? h.removeAttribute('data-scheme') : h.setAttribute('data-scheme','dark'); this.textContent = h.getAttribute('data-scheme')==='dark' ? '浅色' : '深色';">深色</button>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-rocket" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+  <symbol id="i-crosshair" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+</svg>
+
+<div class="win">
+  <div class="titlebar">
+    <div class="brand"><span class="brand-name">汤圆启动器</span><span class="ver">v1.35.4.2</span></div>
+    <div class="winbtns">
+      <div class="wb" title="练枪启动"><svg class="ic"><use href="#i-crosshair"/></svg></div>
+      <div class="wb" title="主题"><svg class="ic"><use href="#i-moon"/></svg></div>
+      <div class="wb"><svg class="ic"><use href="#i-minus"/></svg></div>
+      <div class="wb"><svg class="ic"><use href="#i-x"/></svg></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="id-card">
+      <div class="avatar" title="修改头像"><span>汤</span></div>
+      <div class="id-meta">
+        <div class="nickname">米汤</div>
+        <div class="edit-link">点击头像修改 ›</div>
+      </div>
+    </div>
+
+    <div class="srv-card">
+      <div class="srv-head"><span class="srv-title">我的服务器</span></div>
+      <div class="srv-row">
+        <span class="srv-pill on">在线 12/32</span><span class="srv-name">未烬社区服</span>
+        <span class="srv-enter"><svg class="ic"><use href="#i-right"/></svg></span>
+      </div>
+      <div class="srv-row">
+        <span class="srv-pill off">离线</span><span class="srv-name">未烬练枪服</span>
+        <span class="srv-enter"><svg class="ic"><use href="#i-right"/></svg></span>
+      </div>
+    </div>
+
+    <div class="launch">
+      <div class="btn-launch"><svg class="ic"><use href="#i-rocket"/></svg>启动游戏</div>
+      <div class="quick">
+        <div class="qb"><svg class="ic"><use href="#i-crosshair"/></svg>练枪模式</div>
+        <div class="qb"><svg class="ic"><use href="#i-folder"/></svg>游戏目录</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="caption">方向 C · 软陶 — 暖调亲和 · 大圆角软卡片 · 浅色优先 · 右上角切换深浅</div>
+</body>
+</html>

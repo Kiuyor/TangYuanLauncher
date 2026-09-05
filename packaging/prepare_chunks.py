@@ -19,7 +19,13 @@ import subprocess
 import sys
 import time
 
-SEVENZ = r"D:\7-Zip\7z.exe"
+# 7-Zip 定位: 已知位置优先, 回退常见安装路径 (2026-08-30 审查: 硬编码单路径换机即断)
+_SEVENZ_CANDIDATES = (
+    r"D:\7-Zip\7z.exe",
+    r"C:\Program Files\7-Zip\7z.exe",
+    r"C:\Program Files (x86)\7-Zip\7z.exe",
+)
+SEVENZ = next((p for p in _SEVENZ_CANDIDATES if os.path.isfile(p)), _SEVENZ_CANDIDATES[0])
 TARGET_CHUNK_MB = 1200
 CHUNK_BYTES = TARGET_CHUNK_MB * 1024 * 1024
 # 扩展皮肤库源 (revini-editor 仓库 assets/; 已提交 git)
@@ -41,8 +47,12 @@ PATCHES = [
 # 整文件替换补丁 (原版 -> 增强版; 幂等 = md5 已为目标)
 FILE_REPLACEMENTS = [
     # (相对路径, 源文件, 目标 md5)
+    # 2026-08-31 更新: 自研生成器产物 (CSGOItemBinMaker0.9.1/make_items_bin.py,
+    # 6350 记录: 427 武器涂装×2份(普通+StatTrak 计数0), 10 种刀 240 涂装×2份,
+    # 印花 869×4 + 热门 225×8, 改名卡×20, 音乐盒/徽章全量), 游戏内逐项验证通过。
+    # 旧扩展版(1891 记录)备份: assets/items_730.bin.bak_ext1891_20260831
     ("platform\\items_730.bin", EXT_ITEMS_BIN,
-     "0cfbf18a567f2ab1df95669102198096"),
+     "aa7fc1a186b851cc2831ed4fc9f84408"),
 ]
 
 # ---------- 默认集合进游戏文件的植入项 (2026-08-22 用户指定: 装完即玩) ----------
@@ -64,6 +74,10 @@ AUTOEXEC_BRIDGE = (
 # 优化 Loader (并存 newloader.exe, 原版 Loader.exe 不动 — 与 _install_loader 同源同策略)
 NEWLOADER_SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                              "assets", "Loader_opt23.exe")
+
+# 练枪图 (v2.3.0 一键练枪启动): aim_botz.bsp 进 csgo/maps, 装完即玩
+AIM_MAP_SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "assets", "maps", "aim_botz.bsp")
 
 
 def _file_md5(path: str) -> str:
@@ -178,18 +192,35 @@ def apply_file_replacement(game_dir: str, rel: str, src: str, expect_md5: str) -
     return True
 
 
+# 玩家客户端首次运行会自动重建的个人运行态文件 (2026-08-31: 不随发行包分发——
+# 构建机的键位/服务器历史/统计强加给所有玩家, 且 config.cfg 会压过 s0up 预设体验;
+# 玩家缺这些文件时游戏自建默认值。steam_appid.txt 必须发, 不在列)。
+SHIP_EXCLUDE_BASENAMES = frozenset({
+    "config.cfg", "video.txt", "voice_ban.dt", "server_blacklist.txt",
+    "serverbrowser.vdf", "ingamedialogconfig.vdf",
+    "stats.bin", "stats.txt", "demoheader.tmp", "ugc_collection_cache.txt",
+})
+
+
 def collect_files(game_dir: str):
     """返回 [(相对路径含反斜杠, 大小)] 按路径排序。
 
     排除补丁备份 .bak_<ts> (deep-review 6轮): _patch_file/_replace_file 生成的
     备份会残留目录, 不打进发行分块 (否则玩家安装后目录多出 2 个冗余备份,
     且每轮重跑 prepare_chunks 累积更多 .bak 污染分块)。
+    2026-08-31 扩展: 排除一切 *.bak* (含无时间戳的 items_730.bin.bak /
+    stats.bin.bak / avatar 备份) 与 *.mdmp 游戏崩溃转储 (实测 131MB 一枚)。
+    2026-08-31 再扩展: 排除个人运行态文件 (SHIP_EXCLUDE_BASENAMES) 与
+    rev-client*.log 模拟器日志。
     """
     out = []
     for root, dirs, files in os.walk(game_dir):
         dirs.sort()
         for fn in sorted(files):
-            if fn.endswith(".bak_") or ".bak_" in fn:
+            low = fn.lower()
+            if ".bak" in fn or fn.endswith(".mdmp"):
+                continue
+            if low in SHIP_EXCLUDE_BASENAMES or low.startswith("rev-client"):
                 continue
             full = os.path.join(root, fn)
             rel = os.path.relpath(full, game_dir)
@@ -279,6 +310,31 @@ def compress_chunk(game_dir: str, out_dir: str, idx: int, items,
     return True
 
 
+def normalize_rev_ini_for_ship(game_dir: str) -> None:
+    """发行前把 rev.ini 的 PlayerName 归一为 CSGO:PLAYER (就地, 幂等, 备份)。
+
+    安装器 ApplyRandomName 依赖 NAME_OLD='PlayerName = CSGO:PLAYER' 给每台机器
+    随机昵称; 构建机的 rev.ini 昵称是上次安装器/启动器写的 (如 TangYuan21150530),
+    不归一会让所有玩家共用构建机昵称且随机昵称逻辑静默失配 (2026-08-31 打包预检)。
+    备份 rev.ini.bak_<ts> 会被 collect_files 排除, 不进分块。"""
+    p = os.path.join(game_dir, "rev.ini")
+    if not os.path.isfile(p):
+        print("  [skip] rev.ini 不存在")
+        return
+    with open(p, "rb") as f:
+        data = f.read()
+    new = re.sub(rb"(?m)^(\s*PlayerName\s*=\s*).*$", rb"\1CSGO:PLAYER", data)
+    if new == data:
+        print("  [skip] rev.ini PlayerName 已是出厂值")
+        return
+    bak = p + ".bak_" + time.strftime("%Y%m%d%H%M%S")
+    with open(bak, "wb") as f:
+        f.write(data)
+    with open(p, "wb") as f:
+        f.write(new)
+    print(f"  [normalize] rev.ini PlayerName -> CSGO:PLAYER (备份 {os.path.basename(bak)})")
+
+
 def main() -> None:
     game_dir = os.path.abspath(sys.argv[1])
     out_dir = os.path.abspath(sys.argv[2])
@@ -288,6 +344,7 @@ def main() -> None:
         apply_patch(game_dir, rel, old, new, marker)
     for rel, src, md5 in FILE_REPLACEMENTS:
         apply_file_replacement(game_dir, rel, src, md5)
+    normalize_rev_ini_for_ship(game_dir)
     # 默认集合植入 (2026-08-22 用户指定: s0up 预设 / 优化 Loader / 皮肤补全装完即玩)
     if os.path.isdir(S0UP_PRESET_DIR):
         for f in S0UP_FILES:
@@ -297,6 +354,10 @@ def main() -> None:
     else:
         print(f"  [warn] s0up 预设源目录不存在: {S0UP_PRESET_DIR}")
     copy_into(game_dir, "newloader.exe", NEWLOADER_SRC)
+    if os.path.isfile(AIM_MAP_SRC):
+        copy_into(game_dir, os.path.join("csgo", "maps", "aim_botz.bsp"), AIM_MAP_SRC)
+    else:
+        print(f"  [warn] 练枪图源缺失: {AIM_MAP_SRC}")
     print("== 2/3 收集文件清单")
     files = collect_files(game_dir)
     total = sum(s for _, s in files)

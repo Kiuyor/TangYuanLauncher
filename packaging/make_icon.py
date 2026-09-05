@@ -6,8 +6,8 @@ import math
 from PIL import Image
 
 SRC = r"C:\Users\75017\Downloads\IMG_20260805_113851.png"
-OUT_ALPHA = r"D:\cs\revini-editor\packaging\assets\icon_alpha.png"
-OUT_PREVIEW = r"D:\cs\revini-editor\packaging\assets\icon_preview.png"
+OUT_ALPHA = r"D:\re-la\revini-editor\packaging\assets\icon_alpha.png"
+OUT_PREVIEW = r"D:\re-la\revini-editor\packaging\assets\icon_preview.png"
 
 im = Image.open(SRC).convert("RGBA")
 w, h = im.size

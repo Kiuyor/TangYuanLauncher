@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>方向 D · 终端 — 汤圆启动器大改方向稿</title>
+<style>
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:400; src:url('../fonts/sc/HarmonyOS_SansSC_Regular.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:500; src:url('../fonts/sc/HarmonyOS_SansSC_Medium.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:700; src:url('../fonts/sc/HarmonyOS_SansSC_Bold.woff2') format('woff2'); }
+  :root {
+    --bg:#0a0e0c; --backdrop:#050705;
+    --line:rgba(120,200,150,.16); --line-soft:rgba(120,200,150,.08);
+    --ink:#c9d4cd; --ink2:#93a39a; --ink3:#5f6e66;
+    --acc:#46d47e; --acc-deep:#2fae63; --acc-ink:#04120a;
+    --dim:#48544e;
+  }
+  html[data-scheme="light"] {
+    --bg:#fafaf7; --backdrop:#e4e6e0;
+    --line:rgba(20,60,35,.18); --line-soft:rgba(20,60,35,.08);
+    --ink:#1a201c; --ink2:#45514a; --ink3:#7d8a81;
+    --acc:#0e9f52; --acc-deep:#0b8443; --acc-ink:#f2faf5;
+    --dim:#a8b2aa;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; }
+  body {
+    background:var(--backdrop);
+    font-family:"HarmonyOS Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+    display:flex; align-items:center; justify-content:center; color:var(--ink);
+  }
+  .mono { font-family:"JetBrains Mono",Consolas,monospace; }
+  svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-0.15em; flex-shrink:0; }
+
+  .win { width:360px; height:510px; border-radius:4px; overflow:hidden; position:relative;
+    background:var(--bg); border:1px solid var(--line);
+    display:flex; flex-direction:column; }
+  .toggle { position:fixed; top:10px; right:12px; z-index:9; height:28px; padding:0 12px; border-radius:4px;
+    border:1px solid var(--line); background:var(--bg); color:var(--ink2); font-size:12px; cursor:pointer; }
+  .caption { position:fixed; bottom:12px; left:0; right:0; text-align:center; font-size:11px; color:var(--ink3); user-select:none; }
+
+  /* ===== 标题栏 ===== */
+  .titlebar { height:44px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px 0 14px; border-bottom:1px solid var(--line-soft); }
+  .brand { display:flex; align-items:center; gap:8px; }
+  .brand-name { font-size:12px; color:var(--ink2); }
+  .brand-name b { color:var(--acc); font-weight:500; }
+  .ver { font-size:10px; color:var(--ink3); }
+  .winbtns { display:flex; gap:2px; }
+  .wb { width:26px; height:26px; border-radius:4px; display:flex; align-items:center; justify-content:center;
+    color:var(--ink3); font-size:13px; cursor:pointer; transition:background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1); }
+  .wb:hover { background:var(--line-soft); color:var(--ink); }
+
+  /* ===== 主体（左对齐高密度） ===== */
+  .body { flex:1; display:flex; flex-direction:column; padding:14px 16px 14px; }
+  .prompt { font-size:10px; color:var(--ink3); letter-spacing:1px; margin-bottom:4px; }
+
+  .identity { display:flex; align-items:center; gap:12px; }
+  .avatar { width:44px; height:44px; border-radius:4px; border:1px solid var(--line); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; background:var(--line-soft);
+    transition:border-color 150ms cubic-bezier(.4,0,.2,1); }
+  .avatar:hover { border-color:var(--acc); }
+  .avatar span { font-size:17px; font-weight:700; color:var(--acc); }
+  .id-meta { display:flex; flex-direction:column; gap:2px; }
+  .nickname { font-size:16px; font-weight:700; }
+  .id-sub { font-size:10px; color:var(--ink3); }
+
+  .status-line { margin-top:12px; display:flex; align-items:center; gap:7px; font-size:11px; }
+  .status-line .k { color:var(--ink3); }
+  .cursor { display:inline-block; width:7px; height:12px; background:var(--acc); vertical-align:-2px; animation:cursor-blink 1.2s steps(1) infinite; }
+  @keyframes cursor-blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+
+  .srv-list { margin-top:10px; border-top:1px solid var(--line-soft); padding-top:8px; display:flex; flex-direction:column; gap:2px; }
+  .srv { display:flex; align-items:center; gap:8px; height:30px; padding:0 6px; border-radius:4px; font-size:12px; cursor:default;
+    transition:background-color 150ms cubic-bezier(.4,0,.2,1); }
+  .srv:hover { background:var(--line-soft); }
+  .srv .tree { color:var(--dim); }
+  .srv .st { font-size:10px; padding:1px 6px; border-radius:3px; }
+  .srv .st.on { color:var(--acc); border:1px solid var(--acc); }
+  .srv .st.off { color:var(--ink3); border:1px solid var(--line); }
+  .srv-n { margin-left:auto; font-size:11px; color:var(--ink2); }
+  .srv-enter { font-size:11px; color:var(--acc); opacity:0; transition:opacity 150ms cubic-bezier(.4,0,.2,1); }
+  .srv:hover .srv-enter { opacity:1; }
+
+  .actions { margin-top:auto; display:flex; flex-direction:column; gap:8px; }
+  .btn-launch { height:46px; border-radius:4px; background:var(--acc); color:var(--acc-ink); cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:9px;
+    font-size:13px; font-weight:700; letter-spacing:2px;
+    transition:background-color 180ms cubic-bezier(.4,0,.2,1), transform 120ms cubic-bezier(.4,0,.2,1); }
+  .btn-launch:hover { background:var(--acc-deep); }
+  .btn-launch:active { transform:translateY(1px); }
+  .quick { display:flex; gap:8px; }
+  .qb { flex:1; height:34px; border-radius:4px; border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
+    font-size:12px; color:var(--ink2); cursor:pointer;
+    transition:border-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1); }
+  .qb:hover { border-color:var(--acc); color:var(--acc); }
+
+  .footer { margin-top:12px; font-size:10px; color:var(--ink3); }
+  .footer b { color:var(--acc); font-weight:500; }
+</style>
+</head>
+<body>
+<button class="toggle" onclick="var h=document.documentElement; h.getAttribute('data-scheme')==='light' ? h.removeAttribute('data-scheme') : h.setAttribute('data-scheme','light'); this.textContent = h.getAttribute('data-scheme')==='light' ? '深色' : '浅色';">浅色</button>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+</svg>
+
+<div class="win">
+  <div class="titlebar">
+    <div class="brand mono"><span class="brand-name">tangyuan-<b>launcher</b></span><span class="ver">v1.35.4.2</span></div>
+    <div class="winbtns">
+      <div class="wb" title="主题"><svg class="ic"><use href="#i-moon"/></svg></div>
+      <div class="wb"><svg class="ic"><use href="#i-minus"/></svg></div>
+      <div class="wb"><svg class="ic"><use href="#i-x"/></svg></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="prompt mono">&gt; user profile</div>
+    <div class="identity">
+      <div class="avatar" title="修改头像"><span>汤</span></div>
+      <div class="id-meta">
+        <div class="nickname">米汤</div>
+        <div class="id-sub mono">uid: 0001 · profile.ready</div>
+      </div>
+    </div>
+
+    <div class="status-line mono"><span class="k">&gt; status:</span><span style="color:var(--acc)">● ONLINE</span><span style="color:var(--ink2)">12/32</span><span class="cursor"></span></div>
+
+    <div class="srv-list">
+      <div class="srv mono">
+        <span class="tree">├</span><span>未烬社区服</span>
+        <span class="st on">在线</span><span class="srv-n">12/32</span><span class="srv-enter">[进入]</span>
+      </div>
+      <div class="srv mono">
+        <span class="tree">└</span><span>未烬练枪服</span>
+        <span class="st off">离线</span><span class="srv-n">--</span><span class="srv-enter">[进入]</span>
+      </div>
+    </div>
+
+    <div class="actions">
+      <div class="btn-launch mono"><svg class="ic"><use href="#i-play"/></svg>[ 启动 csgo.exe ]</div>
+      <div class="quick mono">
+        <div class="qb">[ 练枪 ]</div>
+        <div class="qb">[ 配置 ]</div>
+      </div>
+      <div class="footer mono">ready. auto-backup <b>on</b> · preset: s0up</div>
+    </div>
+  </div>
+</div>
+
+<div class="caption">方向 D · 终端 — 等宽极简 · 左对齐高密度 · 终端绿 · 右上角切换深浅</div>
+</body>
+</html>

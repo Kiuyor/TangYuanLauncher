@@ -5,57 +5,40 @@
 - 禁止新建组件; 确需新建须登记 design-system.md (例外通道)
 - 颜色一律引用 flet_app.theme, 禁止硬编码色值
 """
+import threading
+import time
+import types
+
 import flet as ft
 
+from flet_app import theme
+
+# 颜色/阴影一律 theme.COL_X 属性动态访问 (v2.3.0 深浅换装: from-import 会冻结
+# 启动时的深色值)。此处仅保留与主题无关的静态令牌。
 from flet_app.theme import (
-    COL_BG_CARD,
-    COL_BG_CARD_2,
-    COL_BG_DEEP,
-    COL_BG_GHOST,
-    COL_BG_GHOST_2,
-    COL_BG_GHOST_3,
-    COL_BG_INPUT,
-    COL_BORDER_BRAND,
-    COL_BORDER_SUBTLE,
-    COL_BORDER_VISIBLE,
-    COL_BRAND,
-    COL_BRAND_BG_10,
-    COL_BRAND_BG_15,
-    COL_BRAND_BG_18,
-    COL_BRAND_BG_20,
-    COL_BRAND_HOVER,
-    COL_BRAND_LIGHT,
-    COL_CROP_CANVAS_BG,
-    COL_CROP_GRID,
-    COL_CROP_MASK,
-    COL_ERR,
-    COL_OK,
-    COL_TEXT_DIM,
-    COL_TEXT_MUTED,
-    COL_TEXT_PRIMARY,
-    COL_TEXT_SECONDARY,
-    COL_WARN,
     CROP_MIN,
     FONT_10,
     FONT_11,
     FONT_12,
+    FONT_13,
     FONT_14,
     FONT_15,
     FONT_18,
+    FONT_20,
     FONT_36,
     FONT_44,
     FONT_MONO,
     H_BTN_AV,
     H_BTN_RUN,
     H_INPUT,
+    RADIUS_CARD,
+    RADIUS_CTRL,
     RADIUS_PILL,
     S_AVATAR,
     S_BTN_LAUNCH,
     S_CROP_CANVAS,
     S_CROP_HANDLE,
     S_PREVIEW_AVATAR,
-    SHADOW_BTN,
-    SHADOW_BTN_HOVER,
     SPACE_6,
     SPACE_8,
     SPACE_10,
@@ -64,6 +47,12 @@ from flet_app.theme import (
 )
 
 # ---------- flet 0.86.5 兼容辅助 ----------
+
+def _is_hovered(e) -> bool:
+    """on_hover 事件 data 兼容: flet 0.86.5 传真布尔, 旧版本传字符串 'true'/'false'。
+    (0.86.5 存量缺陷: 按 "true" 字符串比较使全部 hover 处理器恒走 else 分支)"""
+    return e.data is True or e.data == "true"
+
 
 def _border_all(width: int, color: str) -> ft.Border:
     """四边等宽 Border (0.86.5 无 ft.border.all)"""
@@ -85,12 +74,13 @@ def _pad(h: int | None = None, v: int | None = None) -> ft.Padding:
 
 # ==================== 3. 版本徽章 VersionTag ====================
 def version_tag(text: str) -> ft.Container:
-    """版本徽章: 主页标题栏左端。props: text"""
+    """版本徽章: 主页标题栏左端。props: text
+    (v2.3.1 三轮去 mono: 版本号属界面文字, 改 font-cn)"""
     return ft.Container(
         content=ft.Text(text, size=FONT_10, weight=ft.FontWeight.W_700,
-                        color=COL_BRAND_LIGHT, font_family=FONT_MONO),
-        bgcolor=COL_BRAND_BG_20,
-        border=_border_all(1, COL_BORDER_BRAND),
+                        color=theme.COL_BRAND_LIGHT),
+        bgcolor=theme.COL_BRAND_BG_20,
+        border=_border_all(1, theme.COL_BORDER_BRAND),
         border_radius=RADIUS_PILL,
         padding=_pad(h=8, v=2),
     )
@@ -98,15 +88,18 @@ def version_tag(text: str) -> ft.Container:
 
 # ==================== 4. 窗口控制按钮 WinBtn ====================
 def win_btn(icon: ft.Icons, tooltip: str, on_click=None, variant="normal") -> ft.IconButton:
-    """窗口控制图标按钮。props: icon, tooltip, on_click, variant(normal/close)"""
+    """窗口控制图标按钮。props: icon, tooltip, on_click, variant(normal/close)
+    显式 28×28 (W_BTN_WIN 档): IconButton 默认最小 40×40, 主页 5 钮会撑出
+    360px 标题栏把「关闭」裁掉 (2026-08-30 实机验收发现)。"""
     return ft.IconButton(
         icon=icon, icon_size=14, tooltip=tooltip, on_click=on_click,
-        icon_color=COL_TEXT_MUTED,
+        width=28, height=28,
+        icon_color=theme.COL_TEXT_MUTED,
         style=ft.ButtonStyle(
             bgcolor={"": ft.Colors.TRANSPARENT,
-                     "hovered": COL_ERR if variant == "close" else COL_BG_GHOST_2},
-            color={"": COL_TEXT_MUTED, "hovered": ft.Colors.WHITE},
-            shape=ft.RoundedRectangleBorder(radius=0),  # 矩形 (2026-08 全 UI 去圆角)
+                     "hovered": theme.COL_ERR if variant == "close" else theme.COL_WINBTN_HOVER},
+            color={"": theme.COL_TEXT_MUTED, "hovered": ft.Colors.WHITE},
+            shape=ft.RoundedRectangleBorder(radius=RADIUS_CTRL),  # Win11 控件档 4px (v2.3.1)
         ),
     )
 
@@ -124,13 +117,13 @@ def avatar(fallback_char: str, image_path: str | None = None) -> ft.Container:
             content = None
     if content is None:
         content = ft.Text(fallback_char, size=FONT_36,
-                          weight=ft.FontWeight.W_700, color=COL_BRAND_LIGHT)
+                          weight=ft.FontWeight.W_700, color=theme.COL_BRAND_LIGHT)
     return ft.Container(
         content=content,
         width=S_AVATAR, height=S_AVATAR,
         border_radius=RADIUS_PILL,
-        bgcolor=COL_BG_CARD_2,
-        border=_border_all(2, COL_BORDER_VISIBLE),
+        bgcolor=theme.COL_BG_CARD_2,
+        border=_border_all(2, theme.COL_BORDER_VISIBLE),
         alignment=ft.alignment.Alignment(0, 0),
         clip_behavior=ft.ClipBehavior.HARD_EDGE,
     )
@@ -140,58 +133,225 @@ def avatar(fallback_char: str, image_path: str | None = None) -> ft.Container:
 def nickname(text: str, size: int = FONT_18) -> ft.Text:
     """昵称单行省略。props: text, size(默认 18, 主页大昵称传 24)"""
     return ft.Text(text, size=size, weight=ft.FontWeight.W_700,
-                   color=COL_TEXT_PRIMARY, max_lines=1,
+                   color=theme.COL_TEXT_PRIMARY, max_lines=1,
                    overflow=ft.TextOverflow.ELLIPSIS)
 
 
 # ==================== 7. 服务器状态胶囊 ServerMonitor ====================
 class ServerMonitor(ft.Row):
-    """服务器在线状态胶囊。props: status(online/offline), label, count。
+    """服务器在线状态胶囊。props: status(online/offline), label, count,
+    on_hover_change(bool 回调, ServerPanel 展开/收起触发, main.py 接线)。
 
-    ⚠ 数据红线: count 必须来自 A2S 真实查询; offline 时隐藏人数 (rules.md §4.2)。
+    在线点呼吸 dot-breathe (tokens.md §7): 2s 周期 opacity 1↔0.55,
+    全页唯一循环动画 (rules.md §4.6); 右侧淡 chevron 悬停旋转 180°。
+    ⚠ 数据红线: count 必须来自状态 API 真实查询; offline 时隐藏人数 (rules.md §4.2)。
     """
 
-    def __init__(self, label="在线", count="", status="online"):
-        self._dot = ft.Container(width=8, height=8, border_radius=RADIUS_PILL,
-                                 bgcolor=COL_OK)
+    def __init__(self, label="在线", count="", status="online", on_hover_change=None):
+        self.on_hover_change = on_hover_change
+        self._status = status
+        self._breathe_alive = True
+        self._ever_attached = False   # 是否曾挂上 page (区分"构建初期未挂载"与"已被重建分离")
+        self._hovered = False
+        self._dot = ft.Container(
+            width=8, height=8, border_radius=RADIUS_PILL,
+            bgcolor=theme.COL_OK, shadow=theme.SHADOW_DOT_ONLINE,
+            animate_opacity=ft.Animation(1000, theme.EASE_STANDARD),
+        )
         # label 用 text-muted 而非 text-dim: 灰字对比度实测偏低 (~2:1),
         # 提亮一档保证低亮度屏可读 (2026-08 UI 审查落地, design-system #7 已同步)
-        self._label = ft.Text(label, size=FONT_15, color=COL_TEXT_MUTED,
-                              font_family=FONT_MONO)
+        self._label = ft.Text(label, size=FONT_15, color=theme.COL_TEXT_MUTED)
         self._count = ft.Text(count, size=FONT_15, weight=ft.FontWeight.W_600,
-                              color=COL_TEXT_SECONDARY, font_family=FONT_MONO)
+                              color=theme.COL_TEXT_SECONDARY)
+        # 淡 chevron (悬停提示可展开 ServerPanel; 悬停旋转 180°)
+        self._chev = ft.Container(
+            content=ft.Icon(ft.Icons.KEYBOARD_ARROW_DOWN, size=12,
+                            color=theme.COL_TEXT_DIM),
+            margin=ft.margin.Margin(left=2, top=0, right=0, bottom=0),
+            animate_rotation=ft.Animation(theme.MOTION_FAST, theme.EASE_STANDARD),
+            rotate=ft.Rotate(0),
+        )
         self._container = ft.Container(
-            content=ft.Row([self._dot, self._label, self._count], spacing=7),
+            content=ft.Row([self._dot, self._label, self._count, self._chev], spacing=7),
             padding=_pad(h=12, v=5),
             border_radius=RADIUS_PILL,
-            bgcolor=COL_BG_GHOST,
-            border=_border_all(1, COL_BORDER_SUBTLE),
+            bgcolor=theme.COL_BG_GHOST,
+            border=_border_all(1, theme.COL_BORDER_SUBTLE),
+            on_hover=self._on_hover,
         )
-        self._status = status
-        # 按初始 status 应用点色/人数 (offline=灰点隐藏人数, online=绿点显示)
+        # 按初始 status 应用点色/人数 (offline=灰点隐藏人数, online=绿点呼吸)
         if status == "offline":
-            self._dot.bgcolor = COL_TEXT_DIM
+            self._apply_offline_dot()
             self._count.visible = False
         else:
-            self._dot.bgcolor = COL_OK
             self._count.visible = True
+            self._start_breathe()
         # tight=True: Row 收缩到内容宽度 (0.86.5 无 mainAxisSize), 否则撑满父容器
         # 导致 Column 的 horizontal_alignment=CENTER 失效, 胶囊靠左 (用户反馈 2026-08)
         super().__init__([self._container], spacing=0, tight=True)
 
+    # ---- 呼吸循环 (dot-breathe, 全页唯一循环动画) ----
+    def _start_breathe(self):
+        threading.Thread(target=self._breathe_loop, daemon=True).start()
+
+    def _breathe_loop(self):
+        while self._breathe_alive:
+            time.sleep(1.0)
+            if not self._breathe_alive or self._status != "online":
+                continue
+            page = self.page
+            if page is None:
+                # 曾挂上 page 后变 None = 已随换装重建/页面关闭: 自停线程, 防泄漏
+                # (原 continue 空转, 每次换装泄漏一条每秒空转的线程, 2026-08-30 审查);
+                # 构建初期尚未挂载 (_ever_attached=False) 则继续等待 — 否则首拍落
+                # 在挂载前会永久失去呼吸动画 (2026-09-05 审查)
+                if self._ever_attached:
+                    self._breathe_alive = False
+                continue
+            self._ever_attached = True
+
+            def _tick(self=self):
+                try:
+                    self._dot.opacity = 0.55 if self._dot.opacity != 0.55 else 1.0
+                    self._dot.update()
+                except Exception:  # noqa: BLE001 - 控件已随换装重建/页面关闭: 停线程
+                    self._breathe_alive = False
+            # 项目线程规则 (main.py H1): 工作线程不直改控件, 经 page.run_thread
+            try:
+                page.run_thread(_tick)
+            except Exception:  # noqa: BLE001 - 会话已关: 停线程
+                self._breathe_alive = False
+
+    def _apply_offline_dot(self):
+        self._dot.bgcolor = theme.COL_TEXT_DIM
+        self._dot.shadow = None
+        self._dot.opacity = 1.0
+
+    def _on_hover(self, e):
+        hovered = _is_hovered(e)
+        self._hovered = hovered
+        self._chev.rotate = ft.Rotate(3.14159 if hovered else 0)
+        try:
+            self._chev.update()
+        except Exception:  # noqa: BLE001, S110 - 未挂 page 时跳过
+            pass
+        if self.on_hover_change:
+            self.on_hover_change(hovered)
+
     def set_status(self, status: str, label: str, count: str):
-        """在线: 绿点+人数; 离线: 灰点+隐藏人数"""
+        """在线: 绿点(呼吸)+人数; 离线: 灰点+隐藏人数"""
         self._status = status
         self._label.value = label
         if status == "offline":
-            self._dot.bgcolor = COL_TEXT_DIM
+            self._apply_offline_dot()
             self._count.value = ""
             self._count.visible = False
         else:
-            self._dot.bgcolor = COL_OK
+            self._dot.bgcolor = theme.COL_OK
+            self._dot.shadow = theme.SHADOW_DOT_ONLINE
             self._count.value = count
             self._count.visible = True
-        self.update()
+            if not self._breathe_alive:
+                self._breathe_alive = True
+                self._start_breathe()
+        # 与 ServerPanel.set_servers 对称: 控件已随换装重建/离开主页时静默,
+        # 防状态 API 回包竞态在工作线程抛异常 (2026-09-05 审查)
+        try:
+            self.update()
+        except Exception:  # noqa: BLE001, S110 - 未挂 page: 跳过
+            pass
+
+
+# ==================== 34. 服务器悬停面板 ServerPanel ====================
+class ServerPanel(ft.Container):
+    """悬停 ServerMonitor 胶囊展开的分服面板 (design-system.md #34)。
+
+    形态: 覆盖层 w=264, 卡片底/圆角 8/浮层柔影; 行 = 状态点(8px) + 名称(13/600)
+    + 人数(11, N / M) + 悬停行浮现 28×28「进入」钮。展开/收起动效 (panel-in) 与
+    悬停保持由 main.py 接线 (on_hover + 150ms 延迟收起)。
+    ⚠ 数据红线: 在线状态与人数只来自状态 API 真实查询; 拉取失败该行显示
+    「获取失败」灰点, 禁止编造 (rules.md §4.2)。
+    """
+
+    def __init__(self, on_enter=None):
+        self.on_enter = on_enter
+        self._col = ft.Column([], spacing=2, tight=True)
+        super().__init__(
+            content=self._col, width=264,
+            bgcolor=theme.COL_BG_CARD,
+            border=_border_all(1, theme.COL_BORDER_VISIBLE),
+            border_radius=RADIUS_CARD,
+            shadow=theme.SHADOW_FLOAT,
+            padding=_pad(h=6, v=6),
+            visible=False,
+        )
+
+    def set_servers(self, rows):
+        """rows: [{name, addr, status('online'|'offline'|'error'), players, maxplayers}]
+        空列表 → 引导文案 (design-system #34: 去常用设置配 ConnectServer)。"""
+        if not rows:
+            self._col.controls = [ft.Container(
+                content=ft.Text("暂无预设服务器\n可在常用设置中配置后快速进服",
+                                size=FONT_12, color=theme.COL_TEXT_DIM,
+                                text_align=ft.TextAlign.CENTER),
+                padding=_pad(v=14),
+            )]
+        else:
+            controls = []
+            for r in rows:
+                dot = ft.Container(width=8, height=8, border_radius=RADIUS_PILL)
+                if r.get("status") == "online":
+                    dot.bgcolor = theme.COL_OK
+                    dot.shadow = theme.SHADOW_DOT_ONLINE
+                    count = (f"{r.get('players') if r.get('players') is not None else '?'}"
+                             f" / {r.get('maxplayers') if r.get('maxplayers') is not None else '?'}")
+                elif r.get("status") == "error":
+                    dot.bgcolor = theme.COL_TEXT_DIM
+                    count = "获取失败"
+                else:
+                    dot.bgcolor = theme.COL_TEXT_DIM
+                    count = "离线"
+                count_text = ft.Text(count, size=FONT_11, color=theme.COL_TEXT_MUTED)
+                enter = ft.Container(
+                    content=ft.Icon(ft.Icons.ARROW_FORWARD, size=14,
+                                    color=theme.COL_TEXT_MUTED),
+                    width=28, height=28, border_radius=RADIUS_CTRL,
+                    alignment=ft.alignment.Alignment(0, 0),
+                    tooltip="进入服务器",
+                    on_click=(lambda e, addr=r["addr"]: self.on_enter(addr))
+                    if (self.on_enter and r.get("addr")) else None,
+                    animate_opacity=ft.Animation(theme.MOTION_FAST, theme.EASE_STANDARD),
+                    opacity=0,
+                )
+                row = ft.Container(
+                    content=ft.Row([dot,
+                                    ft.Text(r.get("name") or "", size=FONT_13,
+                                            weight=ft.FontWeight.W_600,
+                                            color=theme.COL_TEXT_PRIMARY,
+                                            expand=True, max_lines=1,
+                                            overflow=ft.TextOverflow.ELLIPSIS),
+                                    count_text, enter],
+                                   spacing=8),
+                    padding=_pad(h=10, v=8),
+                    border_radius=RADIUS_CTRL,
+                    on_hover=lambda e, btn=enter: self._row_hover(e, btn),
+                )
+                controls.append(row)
+            self._col.controls = controls
+        try:
+            self.update()
+        except Exception:  # noqa: BLE001, S110 - 未挂 page 时跳过 (换装重建期)
+            pass
+
+    @staticmethod
+    def _row_hover(e, btn):
+        hovered = _is_hovered(e)
+        e.control.bgcolor = theme.COL_BG_GHOST if hovered else None
+        btn.opacity = 1 if hovered else 0
+        try:
+            e.control.update()
+        except Exception:  # noqa: BLE001, S110 - 未挂 page 时跳过
+            pass
 
 
 # ==================== 8. 启动按钮 LaunchButton ====================
@@ -200,19 +360,33 @@ class LaunchButton(ft.Container):
 
     状态机: idle(主色) → launching(主色hover) → running(成功绿+辉光) → idle
     点击由 on_click 处理 (业务逻辑在 main.py, 本组件只提供样式/状态切换)。
+    动效: hover 变色+阴影加深 (上移 -2px 试做后降级, 见 _on_hover 留档);
+    启动中火箭抖动 rocket-nudge (tokens.md §7): 0.45s×2 有限次非循环。
     """
+
+    # 抖动关键帧 (角度 deg): HTML rocket-nudge 含 translateX±2 + rotate±6;
+    # offset 分量已降级删去 (offset 位移动画实机破坏布局, 批次④留档), 保留旋转
+    _NUDGE_SEQ = ((-6,), (6,), (0,), (-6,), (6,), (0,))
+    _NUDGE_STEP = 0.225   # 每关键帧 225ms → 单周期 0.45s (tokens §7 rocket-nudge 0.45s×2)
 
     def __init__(self, on_click=None, tooltip="启动游戏"):
         self._icon = ft.Icon(ft.Icons.ROCKET_LAUNCH, size=FONT_44,
                              color=ft.Colors.WHITE)
         self._state = "idle"
-        super().__init__(
+        self._nudging = False
+        # 火箭载体盒: 抖动只动 offset/rotate (rules §4.6 动效纪律)
+        self._icon_box = ft.Container(
             content=self._icon,
+            animate=ft.Animation(int(self._NUDGE_STEP * 1000), theme.EASE_STANDARD),
+            rotate=ft.Rotate(0),
+        )
+        super().__init__(
+            content=self._icon_box,
             width=S_BTN_LAUNCH, height=S_BTN_LAUNCH,
             border_radius=RADIUS_PILL,
-            bgcolor=COL_BRAND,
+            bgcolor=theme.COL_BRAND,
             alignment=ft.alignment.Alignment(0, 0),
-            shadow=SHADOW_BTN,
+            shadow=theme.SHADOW_BTN,
             tooltip=tooltip,
             on_click=on_click,
             on_hover=self._on_hover,
@@ -222,23 +396,65 @@ class LaunchButton(ft.Container):
     def _on_hover(self, e):
         if self._state == "launching":
             return
-        if e.data == "true":
-            self.bgcolor = COL_BRAND_HOVER
-            self.shadow = SHADOW_BTN_HOVER
+        if _is_hovered(e):
+            self.bgcolor = theme.COL_BRAND_HOVER
+            self.shadow = theme.SHADOW_BTN_HOVER
+            # hover 上移 -2px 已试做并降级 (批次④留档): 通用 animate + offset 在
+            # flet 0.86.5 实机上会永久破坏 Column 布局 (按钮叠到头像), 移除位移,
+            # 只保留变色 + 阴影加深 (HTML hover 语义的可用子集)
         else:
-            self.bgcolor = COL_BRAND
-            self.shadow = SHADOW_BTN
+            self.bgcolor = theme.COL_BRAND
+            self.shadow = theme.SHADOW_BTN
         self.update()
+
+    def _nudge(self):
+        """启动中火箭抖动: 有限 2 周期非循环; 状态切走立即终止。"""
+        page = self.page
+        if page is None:
+            return
+        self._nudging = True
+        seq = self._NUDGE_SEQ
+
+        def _step(i):
+            if not self._nudging:
+                return
+            (deg,) = seq[i]
+            try:
+                self._icon_box.rotate = ft.Rotate(deg * 3.14159265 / 180)
+                self._icon_box.update()
+            except Exception:  # noqa: BLE001 - 控件已重建: 终止序列
+                self._nudging = False
+
+        for k in range(len(seq)):
+            threading.Timer(self._NUDGE_STEP * k,
+                            lambda k=k: page.run_thread(lambda k=k: _step(k))).start()
+        threading.Timer(self._NUDGE_STEP * len(seq),
+                        lambda: page.run_thread(self._nudge_end)).start()
+
+    def _nudge_end(self):
+        self._nudging = False
+        try:
+            self._icon_box.rotate = ft.Rotate(0)
+            self._icon_box.update()
+        except Exception:  # noqa: BLE001, S110 - 控件已重建: 静默
+            pass
 
     def set_state(self, state: str, tooltip: str | None = None):
         self._state = state
         if state == "launching":
-            self.bgcolor = COL_BRAND_HOVER
+            self.bgcolor = theme.COL_BRAND_HOVER
+            self._nudge()
         elif state == "running":
-            self.bgcolor = COL_OK
+            self.bgcolor = theme.COL_OK
+            # 已启动绿辉光 (HTML: 0 4px 20px var(--launch-glow), tokens §1.6)
+            self.shadow = ft.BoxShadow(blur_radius=20, spread_radius=0,
+                                       color=theme.COL_LAUNCH_GLOW,
+                                       offset=ft.Offset(0, 4))
+            self._nudging = False
         else:
-            self.bgcolor = COL_BRAND
-            self.shadow = SHADOW_BTN
+            self.bgcolor = theme.COL_BRAND
+            self.shadow = theme.SHADOW_BTN
+            self._nudging = False
             # idle 显式复位 tooltip, 否则残留"游戏运行中" (deep-review 7轮 F5)
             self.tooltip = tooltip or "启动游戏"
         if tooltip:
@@ -246,28 +462,21 @@ class LaunchButton(ft.Container):
         self.update()
 
 
-# ==================== 15. 代码键名标签 CodeTag ====================
-def code_tag(text: str) -> ft.Container:
-    """代码键名标签。props: text"""
-    return ft.Container(
-        content=ft.Text(text, size=FONT_10, color=COL_BRAND,
-                        font_family=FONT_MONO),
-        bgcolor=COL_BRAND_BG_10,
-        # 矩形 (2026-08 全 UI 去圆角; 原 RADIUS_2XS)
-        padding=_pad(h=6, v=2),
-    )
-
+# ==================== 15. ~~代码键名标签 CodeTag~~ ====================
+# 已删 (v2.3.1 三轮, rules.md §4.3 隐藏技术细节红线): rev.ini 键名是对用户
+# 无价值的内部细节, 也是 "web coding 味" 来源之一。编号保留防错位;
+# 极少数需要键名的场景用控件 tooltip 呈现, 不占版面。
 
 # ==================== 12. 页头 PageHead ====================
-def page_head(code: str, title: str, desc: str = "") -> ft.Container:
-    """编辑页页头: 代码键名 kicker + 标题 + 描述。props: code, title, desc。
-    (deep-review 7轮 F4: 原 build_page/build_tools_page 内联重复堆砌, 抽组件)"""
+def page_head(title: str, desc: str = "") -> ft.Container:
+    """编辑页页头: 标题 + 描述。props: title, desc。
+    (v2.3.1 三轮: 代码注释式 kicker 已删 — 典型 web coding 味装饰;
+    字重 700 — 800/Black 未随包分发, rules.md §4.5)"""
     return ft.Container(
         content=ft.Column([
-            ft.Text(f"// CFG.{code.upper()}", size=11, color=COL_BRAND_LIGHT,
-                    opacity=0.8, font_family=FONT_MONO),
-            ft.Text(title, size=20, weight=ft.FontWeight.W_800),
-            ft.Text(desc, size=12, color=COL_TEXT_DIM, opacity=0.85) if desc else ft.Text(""),
+            ft.Text(title, size=FONT_20, weight=ft.FontWeight.W_700,
+                    color=theme.COL_TEXT_PRIMARY),
+            ft.Text(desc, size=FONT_12, color=theme.COL_TEXT_DIM) if desc else ft.Text(""),
         ], spacing=4),
         padding=ft.padding.Padding(left=18, top=10, right=18, bottom=14))
 
@@ -297,21 +506,20 @@ def field_grid(fields, build_row, spacing: int = 10,
 
 
 # ==================== 14. 配置卡片 ConfigCard ====================
-def config_card(title: str, desc: str, control, tag: str | None = None,
-                on_hover_shift=True, title_expand=False,
+def config_card(title: str, desc: str, control, on_hover_shift=False,
                 desc_lines: int = 0) -> ft.Container:
-    """设置项卡片。props: title, desc, control, tag(可选 CodeTag)。
+    """设置项卡片。props: title, desc, control, on_hover_shift, desc_lines。
 
-    on_hover_shift: 双列网格内 False (hover 不右移, 见 design-system.md #14)。
-    title_expand: 标题占满剩余宽度 (键名徽章贴右)。
+    标题/描述/控件文字一律左对齐 (v2.3.1 用户否决过水平居中, 勿再提)。
+    on_hover_shift: hover 右移 +4px (批次④试做项; 双列网格内 False —
+    design-system.md #14; 卡顿即降级删 offset 行)。
     desc_lines: >0 时描述固定行高容器 (双列等高, main.py 用 2)。
     """
     title_row = ft.Row([
         ft.Text(title, size=FONT_14, weight=ft.FontWeight.W_700,
-                color=COL_TEXT_PRIMARY, expand=title_expand),
-        code_tag(tag) if tag else ft.Container(),
+                color=theme.COL_TEXT_PRIMARY),
     ], spacing=SPACE_8)
-    desc_text = ft.Text(desc, size=FONT_12, color=COL_TEXT_DIM,
+    desc_text = ft.Text(desc, size=FONT_12, color=theme.COL_TEXT_DIM,
                         max_lines=desc_lines or None,
                         overflow=ft.TextOverflow.ELLIPSIS if desc_lines else None)
     if desc_lines:
@@ -328,18 +536,20 @@ def config_card(title: str, desc: str, control, tag: str | None = None,
     card = ft.Container(
         content=ft.Column([top, control], spacing=SPACE_10),
         padding=SPACE_16,
-        # 矩形 (2026-08 用户决策去圆角, 全 UI 卡片直角)
-        bgcolor=COL_BG_CARD,
-        border=_border_all(1, COL_BORDER_SUBTLE),
+        border_radius=RADIUS_CARD,          # Win11 卡片档 8px (v2.3.1)
+        bgcolor=theme.COL_BG_CARD,
+        border=_border_all(1, theme.COL_BORDER_SUBTLE),
+        shadow=theme.SHADOW_CARD,           # 卡片柔影 (tokens.md §1.7 card-shadow)
     )
+    # hover 右移 +4px 已试做并降级 (批次④留档): offset 位移在 flet 0.86.5 实机
+    # 上会破坏 ListView 内卡片渲染 (卡片有界不绘制), 与 design-system #14
+    # "双列内无位移" 收敛 — hover 只保留 提亮 + 品牌边框
 
     def _hover(e):
-        if e.data == "true":
-            card.bgcolor = COL_BG_GHOST_2
-            card.border = _border_all(1, COL_BORDER_BRAND)
-        else:
-            card.bgcolor = COL_BG_CARD
-            card.border = _border_all(1, COL_BORDER_SUBTLE)
+        hover = _is_hovered(e)
+        card.bgcolor = theme.COL_BG_GHOST_2 if hover else theme.COL_BG_CARD
+        card.border = _border_all(1, theme.COL_BORDER_BRAND if hover
+                                  else theme.COL_BORDER_SUBTLE)
         card.update()
 
     card.on_hover = _hover
@@ -353,7 +563,22 @@ def input_dark(value="", placeholder="", mono=False, multiline=False,
                min_lines: int = 4, max_lines: int = 12) -> ft.TextField:
     """文本输入框。props: value, placeholder, mono, multiline, height, font_size,
     width(固定宽, 字段卡内 236), on_change, max_length, text_align,
-    min_lines/max_lines(multiline 时行数, 加载器启动命令卡用 3/6)"""
+    min_lines/max_lines(multiline 时行数, 加载器启动命令卡用 3/6)
+
+    max_length 不传引擎 (2026-09-05 启动崩溃回归): flet 0.86.5 的 TextField
+    没有 counter_text 参数 (只有 counter/counter_style), 而引擎只要设了
+    maxLength 就必自带 "0/32" 计数器且无法隐藏 (字段卡高度差元凶) —
+    改为 on_change 内手动截断, 限制语义不变, 计数器消失。"""
+    def _on_change(e):
+        v = e.control.value or ""
+        if max_length is not None and len(v) > max_length:
+            e.control.value = v[:max_length]
+            try:
+                e.control.update()   # 控件随重建分离时静默 (与 set_status 同纪律)
+            except RuntimeError:
+                pass
+        if on_change:
+            on_change(e)
     return ft.TextField(
         value=value, hint_text=placeholder, multiline=multiline,
         min_lines=min_lines if multiline else 1,
@@ -361,51 +586,206 @@ def input_dark(value="", placeholder="", mono=False, multiline=False,
         height=None if multiline else height,
         width=width,
         text_size=font_size,
-        bgcolor=COL_BG_INPUT,
+        bgcolor=theme.COL_BG_INPUT,
         border=ft.InputBorder.OUTLINE,
-        border_color=COL_BORDER_VISIBLE,
-        focused_border_color=COL_BRAND,
+        border_color=theme.COL_BORDER_VISIBLE,
+        focused_border_color=theme.COL_BRAND,
         content_padding=_pad(h=12, v=10),
-        # 矩形 (2026-08 全 UI 去圆角; 原 RADIUS_XS)
-        border_radius=0,
-        text_style=ft.TextStyle(color=COL_TEXT_PRIMARY,
+        border_radius=RADIUS_CTRL,   # Win11 控件档 4px (v2.3.1)
+        text_style=ft.TextStyle(color=theme.COL_TEXT_PRIMARY,
                                 font_family=FONT_MONO if mono else None),
-        hint_style=ft.TextStyle(color=COL_TEXT_DIM),
-        on_change=on_change,
-        max_length=max_length,
+        hint_style=ft.TextStyle(color=theme.COL_TEXT_DIM),
+        on_change=_on_change,
+        max_length=None,   # 引擎层不设限 (见 docstring), 截断在上面的 _on_change
         text_align=text_align or ft.TextAlign.LEFT,
     )
 
 
-# ==================== 17. 下拉框 SelectDark ====================
-def select_dark(options, selected=None, placeholder="", width=None, height=None,
-                on_select=None, filled=False, fill_color=None,
-                border_color=COL_BORDER_VISIBLE) -> ft.Dropdown:
-    """选项下拉框。props: options, selected, placeholder, width, height, on_select,
-    filled/fill_color(0.86.5 Dropdown 必须 filled=True 才绘制 fill_color),
-    border_color(字段卡内用 INPUT_BORDER 等价 COL_BORDER_VISIBLE)。
-    options 兼容两种输入: 字符串列表(自动包 Option)或已构建的 Option 列表
-    (main.py rank/combo 分支传 Option, 直接透传——双重包装会让下拉全坏,
-    deep-review 7轮 task-4 迟到发现 HIGH)"""
-    return ft.Dropdown(
-        options=[o if isinstance(o, ft.dropdown.Option) else ft.dropdown.Option(o)
-                 for o in options],
-        value=selected,
-        width=width,
-        height=height,
-        text_size=FONT_14,
-        color=COL_TEXT_PRIMARY,
-        bgcolor=COL_BG_INPUT,
-        border_color=border_color,
-        focused_border_color=COL_BRAND,
-        # 矩形 (2026-08 全 UI 去圆角; 原 RADIUS_XS)
-        border_radius=0,
-        content_padding=_pad(h=12),
-        hint_text=placeholder,
-        on_select=on_select,
-        filled=filled,
-        fill_color=fill_color,
-    )
+# ==================== 17. 下拉框 SelectDark (v2.3.1 四轮重构) ====================
+class SelectDark(ft.PopupMenuButton):
+    """自绘下拉 (design-system.md #17, 原生 ft.Dropdown 弃用)。
+
+    收起态 = InputDark 同款按钮: 同宽 236/同高 48/同边框圆角, 值左对齐,
+    箭头距右缘 8px; 展开态 = 应用同款菜单: bg-card 底 + border-visible +
+    圆角 8 + 浮层柔影, 选中项 brand-bg-10 底 + brand-soft 字 600,
+    悬停 bg-ghost。展开时边框变主色、箭头旋转 180° 变品牌蓝 (motion-fast)。
+
+    实现路线: ft.PopupMenuButton + 自定义 content/items — 引擎弹出层只承担
+    定位/外点关闭/超长列表滚动, 视觉全部自绘。不用纯 Stack 面板的原因:
+    字段卡在 ListView 内, Stack 菜单会被视口裁切、被后续行卡片盖住
+    (Flet 无跨控件层级); 引擎 overlay 路线无此缺陷, 动效为引擎内置
+    弹出过渡 (~150ms, 近似 panel-in)。
+    兼容 ft.Dropdown 消费面: .value / .options(元素含 .key) / .error_text。
+    """
+
+    def __init__(self, options, selected=None, placeholder="", width=None,
+                 height=H_INPUT, on_select=None, font_size=FONT_14):
+        self._on_select_cb = on_select
+        self._open = False
+        self._error: str | None = None
+        self._entries: list[tuple[str, str]] = []
+        for o in options:
+            if isinstance(o, ft.dropdown.Option):
+                self._entries.append((str(o.key), str(o.text or o.key)))
+            elif isinstance(o, (tuple, list)):
+                self._entries.append((str(o[0]), str(o[1])))
+            else:
+                self._entries.append((str(o), str(o)))
+        self._value: str | None = selected if selected in self._keys() else None
+        self._value_text = ft.Text(
+            self._label_of(self._value) or placeholder,
+            size=font_size, color=theme.COL_TEXT_PRIMARY,
+            max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True,
+        )
+        self._chev = ft.Icon(ft.Icons.KEYBOARD_ARROW_DOWN, size=14,
+                             color=theme.COL_TEXT_MUTED)
+        self._chev_box = ft.Container(
+            content=self._chev,
+            animate_rotation=ft.Animation(theme.MOTION_FAST, theme.EASE_STANDARD),
+            rotate=ft.Rotate(0),
+        )
+        self._btn = ft.Container(
+            content=ft.Row([self._value_text, self._chev_box],
+                           spacing=8, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+            width=width, height=height,
+            padding=_pad(h=12),
+            bgcolor=theme.COL_BG_INPUT,
+            border=_border_all(1, theme.COL_BORDER_VISIBLE),
+            border_radius=RADIUS_CTRL,
+        )
+        self._items: list[ft.PopupMenuItem] = []
+        self._render_items()
+        super().__init__(
+            content=self._btn,
+            items=self._items,
+            padding=0,
+            menu_padding=_pad(h=4, v=4),
+            bgcolor=theme.COL_BG_CARD,
+            elevation=8,
+            shadow_color=theme.SHADOW_FLOAT.color,   # 浮层柔影色 (随换装重建)
+            shape=ft.RoundedRectangleBorder(radius=RADIUS_CARD),
+            clip_behavior=ft.ClipBehavior.NONE,
+            menu_position=ft.PopupMenuPosition.UNDER,
+            on_open=self._on_open,
+            on_cancel=self._on_cancel,
+            tooltip=None,
+        )
+
+    # ---- duck-typing: ft.Dropdown 消费面 (main.py populate_all) ----
+    def _keys(self):
+        return [k for k, _ in self._entries]
+
+    def _label_of(self, key):
+        for k, t in self._entries:
+            if k == key:
+                return t
+        return None
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, v):
+        v = str(v) if v is not None else None
+        self._value = v if v in self._keys() else None
+        self._value_text.value = self._label_of(self._value) or ""
+        self._render_items()
+        self._safe_update()
+
+    @property
+    def options(self):
+        """仅 .key 被 main.py populate_all 消费; 返回 Option 以保持鸭子类型。"""
+        return [ft.dropdown.Option(key=k, text=t) for k, t in self._entries]
+
+    @property
+    def error_text(self):
+        return self._error
+
+    @error_text.setter
+    def error_text(self, msg):
+        self._error = msg or None
+        if not self._open:
+            self._btn.border = _border_all(
+                1, theme.COL_ERR if self._error else theme.COL_BORDER_VISIBLE)
+        self._safe_update()
+
+    # ---- 内部 ----
+    def _safe_update(self):
+        try:
+            self.update()
+        except Exception:  # noqa: BLE001, S110 - 未挂 page (首次构建期) 跳过
+            pass
+
+    def _render_items(self):
+        # 菜单与收起钮同宽: menu_padding 4×2, item 撑满菜单内宽 (HTML .dd-menu left:0 right:0)
+        item_w = (self._btn.width - 8) if self._btn.width else None
+        self._items = []
+        for k, t in self._entries:
+            selected = (k == self._value)
+            item_box = ft.Container(
+                content=ft.Text(
+                    t, size=FONT_13,
+                    weight=ft.FontWeight.W_600 if selected else ft.FontWeight.W_400,
+                    color=theme.COL_BRAND_SOFT if selected else theme.COL_TEXT_SECONDARY,
+                    max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
+                ),
+                width=item_w,
+                padding=_pad(h=10, v=8),
+                border_radius=RADIUS_CTRL,
+                bgcolor=theme.COL_BRAND_BG_10 if selected else None,
+                on_hover=lambda e: self._item_hover(e),
+            )
+            self._items.append(ft.PopupMenuItem(
+                content=item_box, on_click=lambda e, key=k: self._pick(key)))
+
+    @staticmethod
+    def _item_hover(e):
+        # 选中项保持 brand 底; 未选中项悬停提亮 bg-ghost (design-system #17)
+        box = e.control
+        if box.bgcolor != theme.COL_BRAND_BG_10:
+            box.bgcolor = theme.COL_BG_GHOST if _is_hovered(e) else None
+            try:
+                box.update()
+            except Exception:  # noqa: BLE001, S110 - 菜单已关闭: 跳过
+                pass
+
+    def _apply_open_visual(self, opened: bool):
+        self._open = opened
+        self._btn.border = _border_all(
+            1, theme.COL_BRAND if opened
+            else (theme.COL_ERR if self._error else theme.COL_BORDER_VISIBLE))
+        self._chev_box.rotate = ft.Rotate(3.14159265 if opened else 0)
+        self._chev.color = theme.COL_BRAND if opened else theme.COL_TEXT_MUTED
+        self._btn.update()
+
+    def _on_open(self, e):
+        self._apply_open_visual(True)
+
+    def _on_cancel(self, e):
+        self._apply_open_visual(False)
+
+    def _pick(self, key):
+        changed = (key != self._value)
+        self._value = key
+        self._value_text.value = self._label_of(key) or ""
+        self._error = None
+        self._render_items()
+        self._apply_open_visual(False)
+        self._safe_update()
+        if changed and self._on_select_cb:
+            self._on_select_cb(types.SimpleNamespace(control=self, data=key, name="change"))
+
+
+def select_dark(options, selected=None, placeholder="", width=None,
+                height=H_INPUT, on_select=None, font_size=FONT_14,
+                **_legacy) -> SelectDark:
+    """工厂函数 (组件名与 design-system.md 索引一致)。
+    旧版 ft.Dropdown 的 filled/fill_color/border_color 参数不再生效,
+    以 **_legacy 吞掉以兼容旧调用点 (v2.3.1 四轮自绘重构)。"""
+    return SelectDark(options, selected=selected, placeholder=placeholder,
+                      width=width, height=height, on_select=on_select,
+                      font_size=font_size)
 
 
 # ==================== 18. 推荐项 Chip ====================
@@ -420,17 +800,18 @@ class Chip(ft.Container):
         self._label = label
         self._added = added
         self._text = ft.Text(("✓ " if added else "") + label, size=FONT_11,
-                             color=COL_BRAND_LIGHT if added else COL_TEXT_MUTED,
+                             color=theme.COL_BRAND_LIGHT if added else theme.COL_TEXT_MUTED,
                              font_family=FONT_MONO, max_lines=1,
                              overflow=ft.TextOverflow.ELLIPSIS)
         super().__init__(
             content=self._text,
             padding=_pad(h=10, v=5),
-            # 方形 (2026-08 用户决策: 推荐启动项胶囊改方形; 原 RADIUS_PILL)
-            bgcolor=COL_BRAND_BG_18 if added else COL_BG_GHOST,
-            border=_border_all(1, COL_BORDER_BRAND if added else COL_BORDER_VISIBLE),
+            border_radius=RADIUS_CTRL,   # Win11 控件档 4px (v2.3.1)
+            bgcolor=theme.COL_BRAND_BG_18 if added else theme.COL_BG_GHOST,
+            border=_border_all(1, theme.COL_BORDER_BRAND if added else theme.COL_BORDER_VISIBLE),
             on_click=lambda e: self.toggle(),
             ink=False,
+            animate_scale=ft.Animation(160, theme.EASE_STANDARD),   # chip-pop (tokens §7)
         )
         self._on_toggle = on_toggle
 
@@ -438,16 +819,36 @@ class Chip(ft.Container):
         """外部同步 added 态 (加载器 _sync_chips 用): 不触发 on_toggle"""
         self._added = added
         self._text.value = ("✓ " if added else "") + self._label
-        self._text.color = COL_BRAND_LIGHT if added else COL_TEXT_MUTED
-        self.bgcolor = COL_BRAND_BG_18 if added else COL_BG_GHOST
-        self.border = _border_all(1, COL_BORDER_BRAND if added else COL_BORDER_VISIBLE)
+        self._text.color = theme.COL_BRAND_LIGHT if added else theme.COL_TEXT_MUTED
+        self.bgcolor = theme.COL_BRAND_BG_18 if added else theme.COL_BG_GHOST
+        self.border = _border_all(1, theme.COL_BORDER_BRAND if added else theme.COL_BORDER_VISIBLE)
 
     def toggle(self):
         self._added = not self._added
         self.set_added(self._added)
+        self._pop()
         self.update()
         if self._on_toggle:
             self._on_toggle(self._label, self._added)
+
+    def _pop(self):
+        """chip-pop 勾选弹跳 (tokens §7): scale 0.94→1, 160ms 有限 1 次。"""
+        page = self.page
+        if page is None:
+            return
+        try:
+            self.scale = ft.Scale(0.94)
+            self.update()
+        except Exception:  # noqa: BLE001 - 未挂 page: 跳过动效
+            return
+
+        def _up():
+            try:
+                self.scale = ft.Scale(1)
+                self.update()
+            except Exception:  # noqa: BLE001, S110 - 已重建: 静默
+                pass
+        threading.Timer(0.06, lambda: page.run_thread(_up)).start()
 
 
 # ==================== 22. 类别标签 CatTag ====================
@@ -455,10 +856,10 @@ def cat_tag(text: str) -> ft.Container:
     """工具类别标签。props: text"""
     return ft.Container(
         content=ft.Text(text, size=FONT_10, weight=ft.FontWeight.W_600,
-                        color=COL_BRAND_LIGHT),
-        bgcolor=COL_BRAND_BG_15,
-        border=_border_all(1, COL_BORDER_BRAND),
-        # 矩形 (2026-08 全 UI 去圆角; 原 RADIUS_2XS)
+                        color=theme.COL_BRAND_LIGHT),
+        bgcolor=theme.COL_BRAND_BG_15,
+        border=_border_all(1, theme.COL_BORDER_BRAND),
+        border_radius=RADIUS_CTRL,   # Win11 控件档 4px (v2.3.1)
         padding=_pad(h=8, v=2),
     )
 
@@ -466,8 +867,11 @@ def cat_tag(text: str) -> ft.Container:
 # ==================== 23. 风险标签 RiskTag ====================
 # key 兼容中英文: REPAIR_TOOLS 的 risk 是中文 (低/中/高, app/tools.py),
 # design-system.md #23 记 low/mid/high — 两套都收, 未知 key 回退"低" (deep-review 5轮 LOW-8)
-_RISK_COLORS = {"low": COL_OK, "mid": COL_WARN, "high": COL_ERR,
-                "低": COL_OK, "中": COL_WARN, "高": COL_ERR}
+# 函数化取色: 模块级 dict 会在 import 时冻结深色值, 换装后不可见 (v2.3.0)
+def _risk_color(level: str) -> str:
+    return {"low": theme.COL_OK, "mid": theme.COL_WARN, "high": theme.COL_ERR,
+            "低": theme.COL_OK, "中": theme.COL_WARN, "高": theme.COL_ERR}.get(
+        level, theme.COL_OK)
 
 
 def risk_tag(level: str, text: str | None = None) -> ft.Text:
@@ -475,7 +879,7 @@ def risk_tag(level: str, text: str | None = None) -> ft.Text:
     label = text or {"low": "风险:低", "mid": "风险:中", "high": "风险:高",
                      "低": "风险:低", "中": "风险:中", "高": "风险:高"}.get(level, "风险:低")
     return ft.Text(label, size=FONT_11, weight=ft.FontWeight.W_600,
-                   color=_RISK_COLORS.get(level, COL_OK))
+                   color=_risk_color(level))
 
 
 # ==================== 24. 运行按钮 RunButton ====================
@@ -490,23 +894,22 @@ class RunButton(ft.FilledButton):
             content=ft.Row([self._icon, self._label], spacing=5),
             height=H_BTN_RUN,
             style=ft.ButtonStyle(
-                bgcolor=COL_BRAND,
+                bgcolor=theme.COL_BRAND,
                 color=ft.Colors.WHITE,
-                shape=ft.RoundedRectangleBorder(radius=0),  # 矩形 (2026-08 去圆角)
+                shape=ft.RoundedRectangleBorder(radius=RADIUS_CTRL),  # Win11 控件档
             ),
             on_click=on_click,
         )
         # 0.86.5 ButtonStyle 无 hover 态, 手动切换 bgcolor (main.py 同模式)
-        self._base_style = self.style
         self.on_hover = self._on_hover
 
     def _on_hover(self, e):
         if self.disabled:
             return
         self.style = ft.ButtonStyle(
-            bgcolor=COL_BRAND_HOVER if e.data == "true" else COL_BRAND,
+            bgcolor=theme.COL_BRAND_HOVER if _is_hovered(e) else theme.COL_BRAND,
             color=ft.Colors.WHITE,
-            shape=ft.RoundedRectangleBorder(radius=0),  # 矩形 (2026-08 去圆角)
+            shape=ft.RoundedRectangleBorder(radius=RADIUS_CTRL),  # Win11 控件档
         )
         self.update()
 
@@ -518,13 +921,15 @@ class RunButton(ft.FilledButton):
 
 
 # ==================== 25. 工具状态 ToolStatus ====================
-_STATUS_COLORS = {"idle": COL_TEXT_DIM, "running": COL_WARN,
-                  "ok": COL_OK, "fail": COL_ERR}
+# 函数化取色: 模块级 dict 会在 import 时冻结深色值, 换装后不可见 (v2.3.0)
+def _status_color(state: str) -> str:
+    return {"idle": theme.COL_TEXT_DIM, "running": theme.COL_WARN,
+            "ok": theme.COL_OK, "fail": theme.COL_ERR}.get(state, theme.COL_TEXT_DIM)
 
 
 def tool_status(state="idle", text="待运行") -> ft.Text:
     """工具运行状态。props: state(idle/running/ok/fail), text"""
-    return ft.Text(text, size=FONT_11, color=_STATUS_COLORS[state],
+    return ft.Text(text, size=FONT_11, color=_status_color(state),
                    text_align=ft.TextAlign.RIGHT)
 
 
@@ -536,13 +941,14 @@ def rec_panel(chips, title: str = "推荐启动项", expand: int = 2) -> ft.Cont
     return ft.Container(
         content=ft.Column([
             ft.Text(title, size=11, weight=ft.FontWeight.W_600,
-                    color=COL_TEXT_MUTED),
+                    color=theme.COL_TEXT_MUTED),
             ft.Column(chips, spacing=6,
                       horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
         ], spacing=8),
-        bgcolor=COL_BG_GHOST_3,
-        border=_border_all(1, COL_BORDER_SUBTLE),
-        # 矩形 (2026-08 用户决策去圆角)
+        bgcolor=theme.COL_BG_GHOST_3,
+        border=_border_all(1, theme.COL_BORDER_SUBTLE),
+        border_radius=RADIUS_CARD,   # Win11 卡片档 8px (v2.3.1, design-system #19)
+        shadow=theme.SHADOW_CARD,
         padding=SPACE_12,
         expand=expand,
     )
@@ -581,21 +987,22 @@ def tool_card(cat: str, risk: str, name: str, on_run=None,
         content=ft.Column([
             top,
             ft.Text(name, size=FONT_14, weight=ft.FontWeight.W_700,
-                    color=COL_TEXT_PRIMARY),
+                    color=theme.COL_TEXT_PRIMARY),
             status,
         ], spacing=SPACE_6),
         padding=SPACE_16,
-        # 矩形 (2026-08 用户决策去圆角)
-        bgcolor=COL_BG_CARD,
-        border=_border_all(1, COL_BORDER_SUBTLE),
+        border_radius=RADIUS_CARD,    # Win11 卡片档 8px (v2.3.1)
+        bgcolor=theme.COL_BG_CARD,
+        border=_border_all(1, theme.COL_BORDER_SUBTLE),
+        shadow=theme.SHADOW_CARD,
         expand=expand,
     )
 
     def _hover(e):
-        if e.data == "true":
-            card.border = _border_all(1, COL_BORDER_BRAND)
+        if _is_hovered(e):
+            card.border = _border_all(1, theme.COL_BORDER_BRAND)
         else:
-            card.border = _border_all(1, COL_BORDER_SUBTLE)
+            card.border = _border_all(1, theme.COL_BORDER_SUBTLE)
         card.update()
 
     card.on_hover = _hover
@@ -605,7 +1012,7 @@ def tool_card(cat: str, risk: str, name: str, on_run=None,
 
 
 # ==================== 27. 编码切换 EncGroup ====================
-def enc_group(segments, selected, on_change=None) -> ft.Container:
+class EncGroup(ft.Container):
     """编码切换 (design-system.md #27, HTML .enc-group 结构)。
 
     2026-08 UI 审查: 原 ft.SegmentedButton 的 style 只能整体应用(选中/未选中
@@ -613,43 +1020,81 @@ def enc_group(segments, selected, on_change=None) -> ft.Container:
     → 自绘: ghost 底容器 + 分段按钮, 选中段 = 20% 主色浅底 + 主色浅字,
     未选中 = 透明 + 灰字 (与 chip 已添加态/导航激活态同一视觉语言)。
     props: segments([(value, label), ...]), selected(当前值), on_change(value)。
+
+    selected property (2026-08-30 审查): load_file 按文件实际编码回填显示 —
+    原实现返回裸 Container, `enc_selector.selected = [...]` 是 no-op, 显示
+    恒为构建时的初始段, 与实际保存编码脱钩 (恰好是本控件要防的乱码误导场景)。
+    property 静默换段不触发 on_change — st['enc'] 由调用方自行维护。
     """
-    state = {"sel": selected}
-    btns: list[ft.Container] = []
 
-    def _render():
-        for (value, _), btn in zip(segments, btns):
-            active = value == state["sel"]
-            btn.bgcolor = COL_BRAND_BG_20 if active else ft.Colors.TRANSPARENT
-            btn.border = _border_all(1, COL_BORDER_BRAND if active else ft.Colors.TRANSPARENT)
-            btn.content.color = COL_BRAND_LIGHT if active else COL_TEXT_DIM  # type: ignore[union-attr]
-
-    def _set(v):
-        if v == state["sel"]:
-            return
-        state["sel"] = v
-        _render()
-        if on_change:
-            on_change(v)
-
-    for value, label in segments:
-        btn = ft.Container(
-            content=ft.Text(label, size=FONT_11, weight=ft.FontWeight.W_600,
-                            color=COL_TEXT_DIM),
-            padding=_pad(h=12, v=5),
-            # 矩形 (2026-08 全 UI 去圆角; 原 RADIUS_XS)
-            on_click=lambda e, v=value: _set(v),
-            ink=False,
+    def __init__(self, segments, selected, on_change=None):
+        # 命名注意: 不能用 _values/_dirty/_frozen 等 — flet 基类把它们用作
+        # 响应式存储, super().__init__() 会覆盖 (实测 _values 被换成 dict,
+        # setter 的成员判断随之永远失真)
+        self._enc_values = [v for v, _ in segments]
+        self._sel = selected
+        self._on_change_cb = on_change
+        self._btn_of: dict = {}
+        for value, label in segments:
+            self._btn_of[value] = ft.Container(
+                content=ft.Text(label, size=FONT_11, weight=ft.FontWeight.W_600,
+                                color=theme.COL_TEXT_DIM),
+                padding=_pad(h=12, v=5),
+                border_radius=3,   # 段内 3px (v2.3.1 Win11 档, HTML .enc-btn)
+                on_click=lambda e, v=value: self._pick(v),
+                ink=False,
+            )
+        self._render()
+        super().__init__(
+            content=ft.Row(list(self._btn_of.values()), spacing=2),
+            bgcolor=theme.COL_BG_GHOST,   # HTML .enc-group rgba(255,255,255,0.05)
+            border=_border_all(1, theme.COL_BORDER_SUBTLE),
+            border_radius=RADIUS_CTRL,    # 外组 4px (v2.3.1 Win11 档)
+            padding=_pad(h=3, v=3),
         )
-        btns.append(btn)
-    _render()
-    return ft.Container(
-        content=ft.Row(btns, spacing=2),
-        bgcolor=COL_BG_GHOST,   # HTML .enc-group rgba(255,255,255,0.05)
-        border=_border_all(1, COL_BORDER_SUBTLE),
-        # 矩形 (2026-08 用户决策去圆角)
-        padding=_pad(h=3, v=3),
-    )
+
+    def _render(self):
+        for value, btn in self._btn_of.items():
+            active = value == self._sel
+            btn.bgcolor = theme.COL_BRAND_BG_20 if active else ft.Colors.TRANSPARENT
+            btn.border = _border_all(1, theme.COL_BORDER_BRAND if active else ft.Colors.TRANSPARENT)
+            btn.content.color = theme.COL_BRAND_LIGHT if active else theme.COL_TEXT_DIM  # type: ignore[union-attr]
+
+    def _safe_update(self):
+        try:
+            self.update()
+        except Exception:  # noqa: BLE001, S110 - 未挂 page (首次构建期) 跳过
+            pass
+
+    def _pick(self, v):
+        if v == self._sel:
+            return
+        self._sel = v
+        self._render()
+        self._safe_update()
+        if self._on_change_cb:
+            self._on_change_cb(v)
+
+    @property
+    def selected(self):
+        return self._sel
+
+    @selected.setter
+    def selected(self, v):
+        """外部回填 (load_file)。接受 str 或 [str] (兼容旧列表写法); 未知值忽略。
+        静默换段: 不触发 on_change (st['enc'] 由调用方同步维护)。"""
+        if isinstance(v, (list, tuple)):
+            v = v[0] if v else None
+        if v not in self._enc_values or v == self._sel:
+            return
+        self._sel = v
+        self._render()
+        self._safe_update()
+
+
+def enc_group(segments, selected, on_change=None) -> EncGroup:
+    """工厂函数 (组件名与 design-system.md 索引一致)。"""
+    return EncGroup(segments, selected, on_change)
 
 
 # ==================== 26. 状态栏 StatusBar ====================
@@ -663,7 +1108,7 @@ def status_bar(enc_selector, status_msg: ft.Text | None = None,
                  (design-system.md #26, 2026-08 UI 审查落地)。
     """
     left = [status_icon if status_icon is not None
-            else ft.Icon(ft.Icons.CHECK_CIRCLE, size=15, color=COL_OK)]
+            else ft.Icon(ft.Icons.CHECK_CIRCLE, size=15, color=theme.COL_OK)]
     if status_msg is not None:
         left.append(status_msg)
     return ft.Container(
@@ -674,8 +1119,8 @@ def status_bar(enc_selector, status_msg: ft.Text | None = None,
         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
         height=64,
         padding=_pad(h=SPACE_16),
-        bgcolor=COL_BG_DEEP,   # HTML 事实源 .statusbar 用 var(--bg-deep) (deep-review 5轮修正)
-        border=_border_top(1, COL_BORDER_SUBTLE),
+        bgcolor=theme.COL_BG_DEEP,   # HTML 事实源 .statusbar 用 var(--bg-deep) (deep-review 5轮修正)
+        border=_border_top(1, theme.COL_BORDER_SUBTLE),
     )
 
 
@@ -685,14 +1130,14 @@ def btn_av(label: str, icon=None, on_click=None, variant="normal"):
     if variant == "primary":
         return ft.FilledButton(label, icon=icon, on_click=on_click, height=H_BTN_AV,
                                style=ft.ButtonStyle(
-                                   bgcolor=COL_BRAND, color=COL_TEXT_PRIMARY,
-                                   shape=ft.RoundedRectangleBorder(radius=0)))  # 矩形
+                                   bgcolor=theme.COL_BRAND, color=theme.COL_TEXT_PRIMARY,
+                                   shape=ft.RoundedRectangleBorder(radius=RADIUS_CTRL)))
     return ft.OutlinedButton(label, icon=icon, on_click=on_click, height=H_BTN_AV,
                              style=ft.ButtonStyle(
                                  bgcolor=ft.Colors.TRANSPARENT,
-                                 color=COL_TEXT_SECONDARY,
-                                 side=ft.BorderSide(1, COL_BORDER_VISIBLE),
-                                 shape=ft.RoundedRectangleBorder(radius=0)))  # 矩形
+                                 color=theme.COL_TEXT_SECONDARY,
+                                 side=ft.BorderSide(1, theme.COL_BORDER_VISIBLE),
+                                 shape=ft.RoundedRectangleBorder(radius=RADIUS_CTRL)))
 
 
 # ==================== 32. 头像预览 PreviewAvatar ====================
@@ -701,8 +1146,8 @@ def preview_avatar() -> ft.Container:
     return ft.Container(
         width=S_PREVIEW_AVATAR, height=S_PREVIEW_AVATAR,
         border_radius=RADIUS_PILL,
-        bgcolor=COL_BG_CARD_2,
-        border=_border_all(2, COL_BORDER_VISIBLE),
+        bgcolor=theme.COL_BG_CARD_2,
+        border=_border_all(2, theme.COL_BORDER_VISIBLE),
         alignment=ft.alignment.Alignment(0, 0),
         clip_behavior=ft.ClipBehavior.HARD_EDGE,
     )
@@ -733,14 +1178,14 @@ class CropCanvas(ft.Container):
                             "AAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
         self._img = ft.Image(src=_TRANSPARENT_1PX, fit=ft.BoxFit.COVER,
                              filter_quality=ft.FilterQuality.HIGH)
-        self._box = ft.Container(border=_border_all(2, COL_BRAND))
+        self._box = ft.Container(border=_border_all(2, theme.COL_BRAND))
         # 框外遮罩 (4 片半透明, 覆盖裁剪框外区域; design-system.md #31)
-        self._masks = [ft.Container(bgcolor=COL_CROP_MASK) for _ in range(4)]
+        self._masks = [ft.Container(bgcolor=theme.COL_CROP_MASK) for _ in range(4)]
         # 九宫格线 (框内 2 横 2 竖)
-        self._grids = [ft.Container(bgcolor=COL_CROP_GRID) for _ in range(4)]
+        self._grids = [ft.Container(bgcolor=theme.COL_CROP_GRID) for _ in range(4)]
         self._handles = {
             d: ft.Container(width=S_CROP_HANDLE, height=S_CROP_HANDLE,
-                            bgcolor=COL_BRAND, border=_border_all(2, COL_TEXT_PRIMARY))
+                            bgcolor=theme.COL_BRAND, border=_border_all(2, theme.COL_TEXT_PRIMARY))
             for d in ("nw", "ne", "sw", "se")
         }
         self._stack = ft.Stack(
@@ -765,8 +1210,8 @@ class CropCanvas(ft.Container):
         super().__init__(
             content=gd,
             width=S_CROP_CANVAS, height=S_CROP_CANVAS,
-            bgcolor=COL_CROP_CANVAS_BG,
-            border=_border_all(1, COL_BORDER_SUBTLE),
+            bgcolor=theme.COL_CROP_CANVAS_BG,
+            border=_border_all(1, theme.COL_BORDER_SUBTLE),
         )
 
     # ---- 外部接口 ----
@@ -855,9 +1300,9 @@ class CropCanvas(ft.Container):
                 elif d == "nw":
                     fx, fy = self._x + s, self._y + s
                 elif d == "ne":
-                    fx, fy = self._x + s, self._y
+                    fx, fy = self._x, self._y + s   # 固定对角 sw
                 else:
-                    fx, fy = self._x, self._y + s
+                    fx, fy = self._x + s, self._y   # 固定对角 ne
                 self._drag = {"fx": fx, "fy": fy}
                 return
         if self._x <= lx <= self._x + s and self._y <= ly <= self._y + s:
@@ -883,9 +1328,9 @@ class CropCanvas(ft.Container):
             elif self._mode == "nw":
                 self._x, self._y = fx - ns, fy - ns
             elif self._mode == "ne":
-                self._x, self._y = fx - ns, fy
+                self._x, self._y = fx, fy - ns      # 对角(sw)固定: 左缘=对角x, 底缘=对角y
             else:
-                self._x, self._y = fx, fy - ns
+                self._x, self._y = fx - ns, fy      # 对角(ne)固定: 右缘=对角x, 顶缘=对角y
         # 拖动中不触发 on_change (预览每帧重解码+编码实测卡顿):
         # 预览更新在 main.py 节流, 松手时 _on_pan_end 强制补最后一帧
         self._render(emit=False)

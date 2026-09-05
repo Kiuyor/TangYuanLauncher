@@ -2,6 +2,81 @@
 
 本项目的所有重要变更均记录于此。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [未发布]
+
+### 变更:2026-09-05 拷问定稿 (卡片等高 / UAC 反馈 / newloader 自动就位)
+
+- **字段卡文本输入框对齐 48px 定稿**:昵称/战队标签/自动进服输入框由 flet 默认 ~63px 改 48px,并去掉 flet 因 max_length 自带的"0/32"字数计数器(不在设计事实源,且是与下拉卡不等高的元凶)— flet 0.86.5 的 TextField 无 counter_text 参数(首版实现误用导致启动即崩),改为引擎不设 maxLength、`input_dark` 在 on_change 内手动截断,长度上限语义不变,双列卡片完全等高
+- **newloader 启动时自动就位**:点启动时目录缺失才从 assets 静默安装(md5 幂等,不覆盖原版 Loader.exe),修复工具页「安装优化 Loader (免残留)」手动工具移除;_install_loader 函数保留供启动链与回归测试
+- **UAC 提权流程反馈补全**:ShellExecuteW 挪后台线程(期间 UI 不僵);弹窗前主页提示"系统将弹出管理员确认 (UAC)" + 按钮置"等待管理员确认…";批准进入统一轮询,取消则按钮复位 + 红字"管理员确认未通过"
+- **新增 assets/Loader_opt23_nouac.exe**:newloader 的 asInvoker 等长清单补丁版(免 UAC 候选,manifest XML 解析已验证),待实机验证(启动/进服/退出清注册表)后再决定是否转正为默认资产
+
+### 修复:全量代码审查 (2026-09-05, 1 项 P1 + 8 项 P3)
+
+- **换装重建后编辑页状态栏整体失效 (P1)**:`_rebuild_editor_surfaces` 重绑 `status_bar` 变量不会替换 `_root` Column 已捕获的旧对象 — 手动/定时切主题后进入编辑页,底部状态栏(编码切换器/状态图标/保存反馈)永久不可见。改经 `status_bar_holder.content` 换入树(与 `title_bar.content` 换装同模式)
+- **ServerMonitor 呼吸线程首拍误杀**:构建初期控件尚未挂 page 时第一拍即永久停转 — 引入 `_ever_attached` 区分"未挂载"(继续等待)与"已重建分离"(自停防泄漏)
+- **ServerMonitor.set_status 静默不对称**:`self.update()` 无 try,状态 API 回包竞态(进编辑页 6s 窗口)在工作线程抛异常 — 与 `ServerPanel.set_servers` 对称包裹
+- **写文件原子写统一**:`_procname_patch`/`_procname_restore`/`_cfg_add_exec`/`apply_values` 由直写(先截断)改为 tmp + `os.replace`,与 `ini_model.save`/settings/avatar 纪律一致
+- **工具页执行超时值换装后丢失**:重建把输入框重置回 120 — 值持久到 `st["tool_timeout"]`
+- **`+exec auto.cfg` 检测容错**:双空格/引号包裹变体不再误报"启动参数缺少 +exec"
+- **清理**:删除 `RunButton._base_style` 死代码、`_sp_show` 重复 `visible=True`、名不副实的 `refresh_dir`(就地换 `page.update()`)
+- **工具描述对齐**:"更新皮肤库"卡片文案 1695 → 6350 条记录(与 gen-8 生成器/打包链一致)
+- **make_icon.py 路径迁移**:输出路径 D:\cs\ → D:\re-la\(D 盘迁移遗留)
+- **修复工具卡片行距补齐 (用户反馈)**:双列网格行间竖距原为 0(两行卡片贴死) — 按事实源 tokens.md §4 `.tool-grid` gap=space-10 在行间插入 10px 垫片;仅动卡片接缝,页头/超时卡/风险告知间距不变
+- **CFG 配置页同款间距补齐 (拷问定稿 B 档)**:组内双列卡片行距 0→10(与工具页/字段页同款垫片法,组标题 top18 分层节奏不动);顶部两条警示条(+exec 缺失/预设缺失)同时出现时也垫 10px — 原先同样贴死
+- **编辑/头像页主题即时换装 (拷问定稿, 用户报告"配置页改深浅色页面不刷新")**:手动切深浅/定时、深色时段保存、定时轮询三条换装路径,在编辑/头像页停留时经 `_redress_nonhome()` 就地触发 epoch 重建并装回树(原惰性策略只在 show_* 进入时检查,人已站在页面上永远等不到) — 未保存修改/当前导航页/裁剪状态/窗口尺寸全保留;废弃"返回主页后应用"惰性文案
+
+## [2.3.1] - 2026-08-30
+
+### 变更:UI/UX 按定稿设计全面实装 (docs/preview v1.html 为唯一事实源)
+
+- **Win11 圆角档位**(推翻 2.2.x 全矩形化):窗口走系统级 DWM 原生圆角 (`DwmSetWindowAttribute`, 失败自动回退矩形并在状态栏留档),卡片/面板/菜单 8px,按钮/输入框/标签/窗口控制钮/导航项 4px;头像/启动钮保持正圆、胶囊保留
+- **自绘下拉框**:界面语言/段位/CFG 枚举下拉全部重构 — 收起态 = 输入框同款 236×48(值左对齐、箭头距右缘 8px),展开态 = 应用同款菜单(卡片底/圆角 8/浮层柔影/选中项品牌蓝底、箭头旋转 180° 变品牌蓝);原生 ft.Dropdown 引擎弹出层弃用
+- **服务器直连改悬停面板**:主页状态胶囊悬停展开分服面板(逐行 状态点+名称+人数, 悬停行浮现「进入」钮,150ms 防误关),「进入」= 一次性 `+connect` 启动、不改常用设置;状态胶囊只显示主服(常用设置 ConnectServer 目标);删除主页服务器下拉与自定义 IP 录入弹窗(预设仍存 settings.json 兼容旧数据)
+- **练枪入标题栏**:主页卡片回归四件套(头像 100 / 昵称 24px / 状态胶囊 / 启动钮 110),练枪改标题栏准星钮,启动按钮保持主页最大视觉元素
+- **去 web coding 味**:删页头代码注释 kicker 与 rev.ini 键名标签;等宽字体收窄至真代码场景(启动命令/IP:端口/CFG 数值);版本徽章/在线人数改界面字体;字段卡输入框 48px 高 + 15px 字(CFG 数值 mono 13px、下拉 14px)
+- **材质与状态**:配置/工具卡片圆角 8 + 柔影;主页内容区品牌氛围垫层(radial 极淡品牌蓝, 非发光);启动按钮「已启动」态补绿辉光;在线点呼吸动画(全页唯一循环)、启动中火箭抖动(有限 2 次非循环)、推荐项勾选弹跳
+- **动效降级留档**:视图/分组/面板入场与 hover 位移(按钮上移 -2px、卡片右移 +4px)在 flet 0.86.5 实机反复破坏布局(内容区空白/控件叠错位),按 rules §4.6 就地降级为即时切换/仅变色;保留 opacity/rotate/scale 三类安全动效;6px 细滚动条实装(page.theme scrollbar_theme)
+
+### 修复(含 2.3.0 存量)
+
+- **主页标题栏裁掉「关闭」钮**:IconButton 默认最小 40×40,5 钮撑出 360px 窗宽 — 显式 28×28
+- **浅色主题一族文字白字不可读**:`page.theme_mode` 未随换装,无显式颜色的 Text 恒按深色取默认色 — theme_mode 随方案切换
+- **定时主题夜间启动崩溃隐患**:`theme.COL_BG`/`COL_CARD` 历史别名只存在于浅色覆盖表,切回深色残留浅色值(根容器/导航白底白字) — 补模块级深色别名
+- **主题菜单/深色时段弹窗打不开**:`page.open()` 在 flet 0.86.5 不存在 — 改 `page.show_dialog()`
+- **全部悬停效果失效**:on_hover 事件按字符串 `"true"` 比较,flet 0.86.5 传真布尔(2.3.0 起存量)— 统一 `_is_hovered()` 兼容两种取值
+
+### 修复:发布前全量代码审查 (2026-08-30 二轮, P0-P3 共 15 项)
+
+- **修改头像在分发版必报错 (P0)**:选图回调遗留调试日志写死 `C:\Users\75017\...` 临时路径,任何其它机器上首次调用即抛异常被兜底吞掉 — 删除全部调试代码
+- **打包缺两个 assets (P1)**:`build_nuitka.bat` 未拷 `assets\maps\aim_botz.bsp` 与 `assets\default_avatar*.dat` — 分发版「恢复默认头像」必失败、更新包/外部目录用户「练枪启动」必失败;补拷贝与失败检查
+- **发布流水线断链 (P1)**:两个打包 bat 指向已损坏的 `.venv311` — 改指活动 `.venv`;ISCC/7-Zip 增加常见路径回退
+- **换装后 CFG 页保存语义错位 (P1)**:主题换装重建编辑页时保存按钮恒接 rev.ini 保存 — 停在 CFG 页点保存会静默丢 CFG 修改、误存 rev.ini;按当前导航页接线;换装重建同时补刷壳层底色(浅色编辑页残留深色背板)、保留未保存 CFG 编辑(不重读盘)
+- **编辑页打开时保存深色时段视图被拽回主页 (P2)**:`_save_period` 无条件重建主页 — 与主题切换同规则改为仅主页即时重建、编辑页走惰性重建
+- **编码选择器显示与实际保存编码脱钩 (P2)**:`enc_group` 返回裸 Container,`load_file` 回填 `selected` 是无声 no-op,UTF-8 文件显示 ANSI — EncGroup 类化并加 `selected` property(静默回填),重建时播种当前编码
+- **导航切页取消后高亮与内容错位 (P2)**:确认丢弃"取消"后 rail 停在目标页且再点无响应 — 取消拨回、确认重指目标、弹窗前先 pop 防叠加
+- **打包链版本号未随 2.3.1 (P2)**:installer.iss/Nuitka 产品版本/输出文件名同步 2.3.1
+- **健壮性 (P3)**:DWM 圆角找窗改 EnumWindows 子串匹配(置脏标题 `* Tangyuan` 曾致 FindWindow 脱靶);切视图仅在窗口失焦时拉焦点(on_event FOCUS/BLUR 跟踪);启动按钮状态探测(tasklist)挪后台线程;工具运行回调对换装后废弃控件兜底;`RevIni.save` 改原子写(tmp+os.replace);`validate_image` 先查头部尺寸再解码;在线点呼吸线程随控件移除自停
+- **深色时段保存致方案翻转时浅色白字 (三轮)**:`_save_period` 只换 theme.* 未同步 `page.theme_mode`(与 `_apply_theme_mode` 不同规)— 补 `_apply_page_theme()`
+- **换装后进入修改头像页显示旧配色 (三轮)**:头像页表面只在启动时构建一次 — 收进 `_rebuild_avatar_surfaces()`,`show_avatar` 按 epoch 重建(裁剪中复用画布保进度);启动测量脚本窗口标题匹配同步 `Tangyuan`
+
+## [2.3.0] - 2026-08-30
+
+### 新增:深浅双主题定时切换 + 服务器直连 + 一键练枪启动
+
+- **深/浅/定时三态主题**:`flet_app/theme.py` 新增浅色令牌集 (品牌蓝 #6495ED、矩形风不变, 浅灰蓝纸面+纯白卡片) 与 `set_scheme()` 整体换装;`main.py`/`components/ui.py` 全部颜色改为 `theme.X` 动态访问 (from-import 会冻结启动色值);主页标题栏新增主题按钮 (深/浅/定时菜单 + 深色时段设置, 默认 19:00-07:00 深色、支持跨午夜), 运行中每 60s 复核时段即时换装;主页换装整组重建, 编辑页/头像页惰性重建 (epoch 标记, 下次进入应用);设置存 settings.json (`theme_mode`/`theme_dark_start`/`theme_dark_end`, 旧安装自动兼容)
+- **服务器选择直连**:主页新增服务器下拉 (跟随常用设置/预设/自定义 IP…), 预设存 settings.json `server_presets` (内置 十人竞技 43.241.51.48:27015=phoenix、躲猫猫 43.241.51.48:27016=zombie, 用户可增自定义项);在线状态按选中服务器显示 (状态 API `servers[]` 数组), 无 sid 映射时聚合显示;启动经既有 `_procname_patch` 临时追加 `+connect`, 启动后自动恢复
+- **一键练枪启动**:主页新增「练枪启动」按钮 — 内置 `assets/maps/aim_botz.bsp` (40MB, VBSP 校验) 幂等拷入 `csgo/maps/` (已有同名不覆盖, AGENTS.md 铁律), 启动链临时追加 `+map aim_botz` 后照常恢复;与直连互斥;**不使用 practice.cfg** (直接加载地图);打包链 `prepare_chunks.py` 同步注入 (装完即玩)
+- **服务器监控修正**:状态 API 已改为 `{"servers":[…]}` 数组结构, 旧实现解析顶层 `online/lastBeat` 字段导致监控恒显示离线 — 本次按新结构解析并接入服务器选择
+
+### 变更:游戏源版本切换 1.35.7.7 → 1.35.4.2
+
+- **游戏源替换**:`D:\re-la\CSGO` 内容由 1.35.7.7 Build 485 (ZerotechOne, 2017-05-02) 重打包整体替换为 1.35.4.2 Build 350 (flashtrak, 2016-07-15) 重打包;目录路径不变,`user_csgo_dir` 无需改动。旧版仍完整保留于 `D:\tangyuangame\game`
+- **启动器修改已重新迁移到新版**(逐项文件校验):s0up 预设 13 文件入 `csgo\cfg\`;rev.ini 四行(`ProcName` 追加 `+exec auto.cfg`、`PlayerName`、`Language=schinese`、`SteamUser`);`newloader.exe`(MD5 = `assets\Loader_opt23.exe`,原版 `Loader.exe` 未动);`startgame.bat` timeout 10s→2s
+- **客户端版本常量对齐**:`app/__init__.py` `VERSION` 1.35.7.7 → 1.35.4.2(与游戏 version-info.txt 一致;`ini_model` 生成默认 rev.ini 模板的 `GameVersion`/`game` 字段随之更新)。注:新版重打包自带 rev.ini 的 `GameVersion=1.35.7.0` 与其 version-info.txt(1.35.4.2)自相矛盾,系重打包自身标签,未改动
+- **打包文档对齐**:`packaging/README_分发版.md`、`docs/design-system.md` 游戏版本号同步为 1.35.4.2。**下次打包将内嵌 1.35.4.2**;已分发的 2.2.4 安装包内仍是 1.35.7.7,重新出包前勿混淆
+- **刻意不迁移**:皮肤库扩展 `items_730.bin`(扩展版为 1.35.7.7 制作,跨版本物品 schema 有风险,保持出厂版;需要时用启动器"皮肤库更新"工具套用);ZR 修复包(zip + anay 已删除,进 ZR 服报错时再取);autoexec.cfg 桥(v2.2.3 已废弃,由 `ProcName +exec auto.cfg` 承担)
+
 ## [2.2.4] - 2026-08-23
 
 ### 修复:第 12 轮深度审查 (CFG 配置页)

@@ -40,3 +40,9 @@ findings2.md
 
 # 例外: 内置交付资源 (Loader 优化版, 需要随仓库分发)
 !assets/Loader_opt23.exe
+
+# 2026-09-05 补充: 崩溃转储 / 工具备份产物不入库
+nuitka-crash-report*.xml
+*.bak_*
+# 例外: asInvoker 候选 (待实机验证转正, 与 Loader_opt23.exe 同规随仓库分发)
+!assets/Loader_opt23_nouac.exe

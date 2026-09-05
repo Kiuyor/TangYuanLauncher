@@ -38,11 +38,16 @@ def validate_image(data: bytes) -> str | None:
         return "图片超过 20MB, 请换一张"
     try:
         img = Image.open(io.BytesIO(data))
-        img.load()
     except Exception:  # noqa: BLE001 - PIL 解不开统一按非法格式处理
         return "无法识别的图片格式"
+    # 先查头部尺寸再整张解码 (2026-08-30 审查): 20MB 内的图片可解出上亿像素
+    # 位图, load() 前拦截省内存; Image.open 只读文件头, width/height 已可用
     if img.width > MAX_DIM or img.height > MAX_DIM:
         return f"图片尺寸超过 {MAX_DIM}×{MAX_DIM}"
+    try:
+        img.load()
+    except Exception:  # noqa: BLE001 - 头部合法但数据损坏, 同按非法格式处理
+        return "无法识别的图片格式"
     return None
 
 

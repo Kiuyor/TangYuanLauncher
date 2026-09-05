@@ -26,9 +26,9 @@
 | 12 | 页头 PageHead | `.page-head` | 编辑页 |
 | 13 | 字段网格 FieldGrid | `.field-grid` | 常用设置 |
 | 14 | 配置卡片 ConfigCard | `.config-card` | 常用设置 |
-| 15 | 代码键名标签 CodeTag | `.code-tag` | 常用设置 |
+| 15 | ~~代码键名标签 CodeTag~~ → 已删 (v2.3.1 三轮, rules §4.3 落实; 需要时走 tooltip) | — | — |
 | 16 | 输入框 InputDark | `.input-dark` | 编辑页 |
-| 17 | 下拉框 SelectDark | `.select-dark` | 常用设置 |
+| 17 | 下拉框 Dropdown | `.dd` `.dd-menu` | 常用设置/CFG |
 | 18 | 推荐项 Chip | `.chips` `.chip` | 加载器 |
 | 19 | 推荐面板 RecPanel | `.rec-panel` | 加载器 |
 | 20 | 启动分栏 LaunchSplit | `.launch-split` | 加载器 |
@@ -45,6 +45,11 @@
 | 31 | 裁剪框 CropBox | `.crop-box` `.crop-handle` | 修改头像 |
 | 32 | 头像预览 PreviewAvatar | `.preview-avatar` | 修改头像 |
 | 33 | 头像操作按钮 AvatarActionBtn | `.btn-av` | 修改头像 |
+| 34 | 服务器悬停面板 ServerPanel | `.server-panel` `.sp-row` | 主页 |
+| 35 | ~~副启动按钮 AltLaunchBtn~~ → 练枪并入标题栏 WinBtn (v2.3.1 二轮) | — | — |
+| 36 | 主题菜单 ThemeMenu | `.menu-panel` `.menu-item` | 主页/编辑页 |
+| 37 | 表单弹窗 FormDialog | `.dialog-mask` `.form-dialog` | 通用 |
+| 38 | 提示条 HintBar | `.hint-bar` | CFG 配置 |
 
 > **Flet 原生豁免标注 (deep-review 7轮 F4 定稿)**: 以下组件在 Flet 中由原生控件直接表达
 > (rules.md §1.4 原生豁免, 不需要也不应封装成 ui.* 组件, 页面直用):
@@ -62,17 +67,17 @@
 
 ### 1. 窗口外壳 Window
 
-- **用途**: 应用窗口容器,承载标题栏 + 内容;**矩形边缘**(2026-08 用户决策,放弃圆角 — Flutter Windows 圆角窗口四角黑边问题无法可靠解决,改矩形彻底消除)
+- **用途**: 应用窗口容器,承载标题栏 + 内容;**Win11 圆角边缘**(v2.3.1 二轮用户决策,推翻 2026-08-22 矩形化 — 窗口走 Win11 原生 DWM 路线 `DwmSetWindowAttribute(Windows_DWM_WINDOW_CORNER_PREFERENCE)`, 系统级渲染无黑边;失败自动回退矩形并留档)
 - **Props**:
-  - `size`: `launcher`(360×510)/ `edit`(784×600)
+  - `size`: `launcher`(360×510, v2.3.1 二轮回归)/ `edit`(784×600)
   - `label`: 窗口标注文本(仅预览用)
 - **何时用**: 两个主视图各一个
 - **何时不用**: 弹窗/对话框不套窗口外壳
-- **Flet**: `ft.Window`(frameless, 深色背景 `bg-deep`, 无圆角) + `ft.Row`/`ft.Column` 内容
+- **Flet**: `ft.Window`(frameless, 深色背景 `bg-deep`) + ctypes DWM 圆角 + `ft.Row`/`ft.Column` 内容
 
 ### 2. 标题栏 TitleBar(主页)
 
-- **用途**: 主页顶部栏:左=版本徽章+产品名,右=窗口控制(配置/最小化/关闭)
+- **用途**: 主页顶部栏:左=版本徽章+产品名(15px, 5 钮布局防换行),右=窗口控制(练枪/主题/配置/最小化/关闭)
 - **Props**: 无(固定结构)
 - **何时用**: 仅主页
 - **何时不用**: 编辑页用 EditTitleBar(组件 9)
@@ -80,19 +85,19 @@
 
 ### 3. 版本徽章 VersionTag
 
-- **用途**: 显示客户端版本号(如 v1.35.7.7)
+- **用途**: 显示客户端版本号(如 v1.35.4.2)
 - **Props**: `text`
 - **何时用**: 主页标题栏左端
 - **何时不用**: 不放正文/卡片内
-- **Flet**: `ft.Container`(pill, bg `brand` 20% 底, border `border-brand`, text `brand-light` mono 10px 700)
+- **Flet**: `ft.Container`(pill, bg `brand` 20% 底, border `border-brand`, text `brand-light` 10px 700, font-cn — v2.3.1 三轮去 mono)
 
 ### 4. 窗口控制按钮 WinBtn
 
-- **用途**: 无边框图标按钮:配置(齿轮)/最小化/关闭
-- **Props**: `icon`(i-settings/i-minus/i-x), `variant`(normal/close)
-- **何时用**: 标题栏右上角;配置按钮仅主页
-- **何时不用**: 不用于主操作(主操作用 BarButton/RunButton)
-- **Flet**: `ft.IconButton`(28×28, **radius 0 矩形** (2026-08-22 全 UI 去圆角), hover bg `rgba(255,255,255,0.08)`;close hover bg `status-red`)
+- **用途**: 无边框图标按钮:练枪(准星, 仅主页)/主题(月亮/太阳, 随当前方案切换)/配置(齿轮, 仅主页)/最小化/关闭
+- **Props**: `icon`(i-crosshair/i-settings/i-minus/i-x; 主题=i-moon/i-sun), `variant`(normal/close)
+- **何时用**: 标题栏右上角;练枪/配置按钮仅主页;主题按钮=主页+编辑页(修改头像页不放)
+- **何时不用**: 不用于主操作(主操作用 BarButton/RunButton);练枪点击 = `on_launch_click(practice=True)` 直接进本地练枪图
+- **Flet**: `ft.IconButton`(28×28, 圆角 4px (Win11 控件档, v2.3.1), hover bg `hover-winbtn`;close hover bg `status-red`)
 
 ### 5. 头像 Avatar
 
@@ -112,12 +117,12 @@
 
 ### 7. 服务器状态胶囊 ServerMonitor
 
-- **用途**: 显示服务器在线状态 + 人数胶囊
-- **Props**: `status`(`online`/`offline`), `label`(在线/离线), `count`(人数,offline 时隐藏)
-- **何时用**: 主页昵称下方
-- **何时不用**: 无服务器地址时不显示人数(数据契约见 DESIGN.md)
-- **⚠ 数据红线**: 人数必须来自 A2S 真实查询,离线禁止展示人数(JS 已实现隐藏逻辑)
-- **Flet**: `ft.Container`(pill, bg `bg-ghost`, border `border-subtle`)内 Row: 圆点(8px `status-green`+3px 浅绿晕/离线 `text-dim`)+ 标签(15px mono **`text-muted`**)+ 人数(15px 600 mono `text-secondary`)。标签用 text-muted 而非 text-dim: 灰字对比度实测偏低,提亮一档保证低亮度屏可读(2026-08 UI 审查落地)
+- **用途**: 显示**主服**(常用设置 ConnectServer 目标)的在线状态 + 人数胶囊;右侧淡 chevron 提示可悬停展开 ServerPanel(#34)
+- **Props**: `status`(`online`/`offline`), `label`(在线/离线/服名), `count`(人数,offline 时隐藏)
+- **何时用**: 主页昵称下方;悬停 = ServerPanel 展开触发器
+- **何时不用**: 编辑页/头像页;无 ConnectServer 配置时只显示「离线」不显示人数
+- **⚠ 数据红线**: 人数必须来自状态 API (`cs.suchitems.top/api/status`) 真实查询,离线禁止展示人数
+- **Flet**: `ft.Container`(pill, bg `bg-ghost`, border `border-subtle`)内 Row: 圆点(8px `status-green`+3px 浅绿晕/离线 `text-dim`)+ 标签(15px **`text-muted`**)+ 人数(15px 600 `text-secondary`, tabular-nums)+ chevron(10px `text-dim`, hover 旋转 180°)。标签用 text-muted 而非 text-dim: 灰字对比度实测偏低,提亮一档保证低亮度屏可读(2026-08 UI 审查落地)
 
 ### 8. 启动按钮 LaunchButton
 
@@ -125,16 +130,17 @@
 - **Props**: `state`(idle/launching/running,控制底色与 title), `icon`(默认 i-rocket)
 - **何时用**: 主页唯一主按钮
 - **何时不用**: 不承载文字;不用作编辑页操作按钮
-- **Flet**: `ft.Container`(110×110 圆, bg `brand` → hover `brand-hover` → busy `launch-busy` → done `launch-done`+`launch-glow`, 居中 Icon rocket 44px 白)
+- **Flet**: `ft.Container`(110×110 圆, bg `brand` → hover `brand-hover` → busy `launch-busy` → done `launch-done`+`launch-glow`, 居中 Icon rocket 44px 白)。启动中态: 火箭图标 rocket-nudge 旋转抖动 0.45s×2 (有限次非循环, v2.3.1 三轮; offset 分量已降级删去, tokens §7)。hover 上移 -2px 已试做并降级 — offset 位移动画实机破坏 Column 布局 (批次④留档), 保留变色+阴影加深
 - 交互: 点击后依次 busy(1.5s)→ done(4s)→ 复位;期间防重复点击
 
 ### 9. 编辑页标题栏 EditTitleBar
 
 - **用途**: 编辑页顶部操作栏:返回/打开cfg文件夹/指定目录/打开文件/保存 + 窗口控制
 - **Props**: 无(固定结构)
-- **何时用**: 仅编辑页
+- **何时用**: 仅编辑页(修改头像页用其变体: 返回+标题, **不放主题按钮** — 裁剪中换装会丢进度)
 - **何时不用**: 主页用 TitleBar
 - **Flet**: `ft.Container`(h=56, bg `bg-deep`, 下边框 `border-subtle`)内两个 Row(left/right)
+- **v2.3.1**: 右侧 win-controls 最左新增主题按钮(WinBtn 变体, 月亮/太阳图标随当前方案)
 
 ### 10. 顶栏按钮 BarButton
 
@@ -142,20 +148,20 @@
 - **Props**: `icon`, `label`, `variant`(normal/primary)
 - **何时用**: 编辑页标题栏;primary 变体用于「保存」
 - **何时不用**: 不作为内容区按钮(内容区用 RunButton);不带图标不放这里
-- **Flet**: `ft.OutlinedButton`(h=34, **radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `bg-ghost-2` → hover `hover-btnbar`, border `border-subtle` → hover `border-visible`, 字 12px 500 `text-secondary`)→ primary: `ft.FilledButton`(h=34, bg `brand` 白字 700)。灰底细边框低调化,保存实心突出主操作(2026-08 UI 审查落地, HTML `.btn-bar` 同款)
+- **Flet**: `ft.OutlinedButton`(h=34, 圆角 4px (Win11 控件档, v2.3.1), bg `bg-ghost-2` → hover `hover-btnbar`, border `border-subtle` → hover `border-visible`, 字 12px 500 `text-secondary`)→ primary: `ft.FilledButton`(h=34, bg `brand` 白字 700)。灰底细边框低调化,保存实心突出主操作(2026-08 UI 审查落地, HTML `.btn-bar` 同款)
 
 ### 11. 侧栏导航 SidebarNav
 
-- **用途**: 编辑页分组导航(常用设置/加载器/修复工具)
+- **用途**: 编辑页分组导航(常用设置/加载器/修复工具/CFG 配置)
 - **Props**: `items`(icon+label 列表), `activeIndex`
 - **何时用**: 编辑页左侧固定栏
-- **何时不用**: 主页无导航;不超过 3 项
+- **何时不用**: 主页无导航;共 4 项(2026-08-23 起, CFG 配置图标=文档)
 - **Flet**: `ft.NavigationRail`(min_width=96, bg `bg-sidebar`, 右边框 `border-subtle`;激活项: indicator `brand` 10% 半透明底 + 圆角 8 + 图标/文字 `brand-soft`)。HTML 的左 3px 主色指示条 NavigationRail 无法表达,以半透明 indicator 底近似——实心 indicator 会盖住图标(用户实机反馈 2026-08),10% 半透明只提亮背景不遮图标(2026-08 UI 审查落地)
 
 ### 12. 页头 PageHead
 
-- **用途**: 编辑页各分区页头:代码键名 kicker + 标题 + 描述
-- **Props**: `code`(kicker 文本,自动大写), `title`, `desc`
+- **用途**: 编辑页各分区页头:标题 + 描述 (v2.3.1 三轮: 代码注释 kicker 已删 — 典型 web coding 味装饰)
+- **Props**: `title`, `desc`
 - **何时用**: 每个编辑页分区顶部(常用设置/加载器/修复工具)
 - **何时不用**: 主页
 - **Flet**: `ui.page_head()`(组件库实现, deep-review 7轮 F4 从页面内联抽取;padding 18/10/18/14)
@@ -170,19 +176,16 @@
 
 ### 14. 配置卡片 ConfigCard
 
-- **用途**: 设置项容器:标题行(标题+CodeTag)+ 描述 + 输入控件
-- **Props**: `title`, `desc`, `tag`(可选 CodeTag), `control`(Input/Select), `title_expand`(标题撑满,键名徽章贴右), `desc_lines`(>0 时描述固定行高容器,双列等高用 2)
+- **用途**: 设置项容器:标题行(标题)+ 描述 + 输入控件 (v2.3.1 三轮: CodeTag 已删)
+- **Props**: `title`, `desc`, `control`(Input/Select), `desc_lines`(>0 时描述固定行高容器,双列等高用 2)。标题/描述/控件文字**左对齐** (v2.3.1 曾试水平居中, 用户否决回退 — **不要再提居中**)
 - **何时用**: 常用设置字段
 - **何时不用**: 工具卡用 ToolCard;双列内 hover 不右移
-- **Flet**: `ui.config_card()`(padding 16, **radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `bg-card`, border `border-subtle`;hover bg `bg-ghost-2` + border `border-brand`, 双列内无位移;desc_lines=2 时 desc 容器高 36px)
+- **Flet**: `ui.config_card()`(padding 16, 圆角 8px (Win11 卡片档, v2.3.1), bg `bg-card`, border `border-subtle`, shadow `SHADOW_CARD`;hover bg `bg-ghost-2` + border `border-brand`, 双列内无位移;desc_lines=2 时 desc 容器高 36px)。hover 右移 +4px 已试做并降级 — offset 位移动画在 flet 0.86.5 实机破坏 ListView 内卡片渲染 (批次④留档, tokens §7)
 
-### 15. 代码键名标签 CodeTag
+### 15. ~~代码键名标签 CodeTag~~(已删, v2.3.1 三轮)
 
-- **用途**: 显示 rev.ini 键名(如 `Emulator.Language`)
-- **Props**: `text`
-- **何时用**: 配置卡片标题右侧
-- **何时不用**: 不用于显示用户输入值
-- **Flet**: `ft.Container`(radius 4, bg `brand` 10%, text mono 10px `brand`)
+- rev.ini 键名是对用户无价值的内部细节 (rules.md §4.3 红线), 也是"web coding 味"的主要来源之一, 从 UI 移除;
+  编号保留防错位。极少数需要键名的场景用控件 tooltip 呈现, 不占版面。
 
 ### 16. 输入框 InputDark
 
@@ -190,23 +193,24 @@
 - **Props**: `value`, `placeholder`, `mono`, `multiline`, `height`, `fontSize`, `width`(字段卡内 236), `onChange`, `maxLength`, `textAlign`
 - **何时用**: 需文本输入的字段
 - **何时不用**: 选项类用 SelectDark;布尔用 Switch
-- **Flet**: `ui.input_dark()`(组件库实现;**radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `bg-input`, border `border-visible`, focus border `brand`;textarea: multiline 多行 16px mono;字段卡内传 height=None 保持 flet 默认 ~63px 高——用户否决过 40px 扁框)
+- **Flet**: `ui.input_dark()`(组件库实现;圆角 4px (Win11 控件档, v2.3.1), bg `bg-input`, border `border-visible`, focus border `brand`;textarea: multiline 多行 16px mono;**字段卡内高 48px + 字 15px**(v2.3.1 定稿: 64px 框小字头重脚轻, 用户否决过 40px), 弹窗/独立场景 40px 设计高)
 
-### 17. 下拉框 SelectDark
+### 17. 下拉框 Dropdown(v2.3.1 四轮重构, 原生 select/Dropdown 弃用)
 
-- **用途**: 选项下拉(界面语言/段位)
-- **Props**: `options`, `selected`, `placeholder`, `width`, `height`, `onSelect`, `filled`/`fillColor`(0.86.5 必须 filled 才绘制底色), `borderColor`
+- **用途**: 选项下拉(界面语言/段位/CFG 枚举)。**收起态** = InputDark 同款 (同宽 236/同高 48/同边框圆角, 箭头距右缘 8px); **展开态** = 应用同款菜单: `bg-card` 底 + `border-visible` + 圆角 8 + float-shadow, 选中项 `brand-bg-10` 底 + `brand-soft` 字 600, 悬停 `bg-ghost`
+- **Props**: `options`([(值, 标签)]), `selected`, `onSelect`, `width`, `height`
 - **何时用**: 需选项的字段
 - **何时不用**: 文本输入用 InputDark;布尔用 Switch
-- **Flet**: `ui.select_dark()`(组件库实现;**radius 0 矩形** (2026-08-22 全 UI 去圆角), 字段卡内 width=236 height=64 filled 匹配 TextField 高度;注意: Dropdown 弹出层可能被圆角窗口裁切——Flet 落地已实测)
+- **动效**: 展开 = panel-in 150ms; 箭头展开旋转 180° + 变 `brand`; 外点/选中即收
+- **Flet**: `ui.select_dark()` 重构为自绘 (`ft.PopupMenuButton` + 自定义 content/items — 引擎弹出层只承担定位/外点关闭/超长滚动, 视觉全部自绘; 字段卡在 ListView 内, 纯 Stack 面板会被视口裁切、被后续行卡片盖住, 故走引擎 overlay 路线; 展开=引擎弹出过渡 ~150ms 近似 panel-in) — 原生 ft.Dropdown 的弹出层是引擎样式, 与设计脱节且曾报圆角窗口裁切问题, 弃用; 菜单超 6 项加滚动
 
 ### 18. 推荐项 Chip
 
-- **用途**: 可点击标签;点击切换 added 态(前缀 ✓)
+- **用途**: 可点击标签;点击切换 added 态(前缀 ✓)。**与启动命令双向联动**(v2.3.1 三轮定稿, 与实装同语义): 勾选 = 启动命令末尾追加该参数行, 取消 = 从启动命令移除该行; chip 的 added 态以参数是否存在于命令中为准。**勾选弹跳** (v2.3.1 四轮): 切换时 chip-pop scale 0.94→1 (160ms, 有限次非循环)
 - **Props**: `label`, `added`(bool)
 - **何时用**: 加载器推荐启动项(右栏竖排)
 - **何时不用**: 不作为普通信息标签(用 CatTag/RiskTag)
-- **Flet**: `ft.Container`(**方形** (2026-08-22 用户决策: 推荐启动项胶囊改方形, 原 pill), border `border-visible`, bg `bg-ghost`;added: bg `brand` 18% + border `border-brand` + 字 `brand-light`;mono 11px)
+- **Flet**: `ft.Container`(圆角 4px (Win11 控件档, v2.3.1), border `border-visible`, bg `bg-ghost`;added: bg `brand` 18% + border `border-brand` + 字 `brand-light`;11px, mono 仅限启动参数语义 (v2.3.1 三轮))
 - ⚠ 竖排时: 单行省略(width 100%, nowrap + ellipsis + min-width 0),防溢出
 
 ### 19. 推荐面板 RecPanel
@@ -215,7 +219,7 @@
 - **Props**: `title`, `chips`, `expand`(Row 内分栏比例,LaunchSplit 右栏 2)
 - **何时用**: 仅加载器右栏
 - **何时不用**: 内容区其他位置
-- **Flet**: `ui.rec_panel()`(组件库实现, deep-review 7轮 F4 抽取;padding 12, **radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `bg-ghost-3`, border `border-subtle`)
+- **Flet**: `ui.rec_panel()`(组件库实现, deep-review 7轮 F4 抽取;padding 12, 圆角 8px (Win11 卡片档, v2.3.1), bg `bg-ghost-3`, border `border-subtle`)
 
 ### 20. 启动分栏 LaunchSplit
 
@@ -231,15 +235,15 @@
 - **Props**: `catTag`, `risk`(低/中/高 或 low/mid/high), `name`, `onRun`, `expand`(2×2 网格等宽);返回 Container 附带 `_run_btn`/`_status` 引用供驱动状态
 - **何时用**: 修复工具页
 - **何时不用**: 设置字段用 ConfigCard
-- **Flet**: `ui.tool_card()`(padding 16, **radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `bg-card`, border `border-subtle`;hover border `border-brand`;内部组合 CatTag + RiskTag + RunButton + ToolStatus)
+- **Flet**: `ui.tool_card()`(padding 16, 圆角 8px (Win11 卡片档, v2.3.1), bg `bg-card`, border `border-subtle`;hover border `border-brand`;内部组合 CatTag + RiskTag + RunButton + ToolStatus)
 
 ### 22. 类别标签 CatTag
 
-- **用途**: 工具类别(缓存清理/注册表修复/Loader)
+- **用途**: 工具类别(缓存清理/注册表修复/物品库/启动优化)
 - **Props**: `text`
 - **何时用**: ToolCard 顶行左侧
 - **何时不用**: 非工具上下文
-- **Flet**: `ft.Container`(**radius 0 矩形** (2026-08-22 全 UI 去圆角; 原 4px), bg `brand` 15%, border `border-brand`, 字 `brand-light` 10px 600)
+- **Flet**: `ft.Container`(圆角 4px (Win11 控件档, v2.3.1), bg `brand` 15%, border `border-brand`, 字 `brand-light` 10px 600)
 
 ### 23. 风险标签 RiskTag
 
@@ -255,7 +259,7 @@
 - **Props**: `label`(运行/运行中), `disabled`, `icon`(play/clock)
 - **何时用**: ToolCard 顶行右侧
 - **何时不用**: 编辑页顶栏操作用 BarButton
-- **Flet**: `ft.FilledButton`(h=32, **radius 0 矩形** (2026-08-22 全 UI 去圆角), bg `brand`, 白字 700 12px;disabled opacity 0.5)
+- **Flet**: `ft.FilledButton`(h=32, 圆角 4px (Win11 控件档, v2.3.1), bg `brand`, 白字 700 12px;disabled opacity 0.5)
 
 ### 25. 工具状态 ToolStatus
 
@@ -279,7 +283,7 @@
 - **Props**: `segments`([(value, label)]), `selected`(当前值), `onChange`(选中回调)
 - **何时用**: 状态栏右侧
 - **何时不用**: 其他位置
-- **Flet**: `ui.enc_group()`(组件库实现, 2026-08 UI 审查落地: 原 ft.SegmentedButton 的 style 只能整体应用、选中/未选中无法分离样式, 亮蓝实心被用户反馈难看 → 自绘 HTML `.enc-group` 结构: ghost 底容器 + 细边框 + 分段按钮(**全矩形**, 2026-08-22 去圆角); 选中段 = `brand` 20% 浅底 + `brand-light` 字 + `border-brand` 边框, 未选中 = 透明 + `text-dim` 字; 11px/600; 与 chip 已添加态/导航激活态同一视觉语言)
+- **Flet**: `ui.enc_group()`(组件库实现, 2026-08 UI 审查落地: 原 ft.SegmentedButton 的 style 只能整体应用、选中/未选中无法分离样式, 亮蓝实心被用户反馈难看 → 自绘 HTML `.enc-group` 结构: ghost 底容器 + 细边框 + 分段按钮(外组 4px / 段内 3px, v2.3.1 Win11 档); 选中段 = `brand` 20% 浅底 + `brand-light` 字 + `border-brand` 边框, 未选中 = 透明 + `text-dim` 字; 11px/600; 与 chip 已添加态/导航激活态同一视觉语言; 2026-08-30 审查起为 `EncGroup` 类, 提供 `selected` property (接受 str/[str], 静默回填不触发 on_change — load_file 按文件实际编码回填显示, 此前裸 Container 上赋值是 no-op, 显示与保存编码脱钩))
 
 ### 28. 开关 Switch(预留)
 
@@ -326,29 +330,74 @@
 - **用途**: 修改头像页操作按钮(选择图片/恢复默认/取消/保存)
 - **Props**: `label`, `icon`, `variant`(primary/ghost/normal)
 - **何时用**: 修改头像页右栏;primary=选择图片/保存(主操作), ghost=恢复默认, normal=取消
-- **何时不用**: 顶栏操作用 BarButton;工具运行用 RunButton
-- **Flet**: primary=`ft.FilledButton`(h=36 矩形, bg `brand` 白字 700)/ ghost=`ft.OutlinedButton`(h=36 矩形, 透明底)
+- **何时不用**: 顶栏操作用 BarButton;工具运行用 RunButton;**主页练枪按钮用 AltLaunchBtn(#35), 不再借用本组件**(v2.3.1 收编修正)
+- **Flet**: primary=`ft.FilledButton`(h=36 圆角4px, bg `brand` 白字 700)/ ghost=`ft.OutlinedButton`(h=36 圆角4px, 透明底)
+
+### 34. 服务器悬停面板 ServerPanel(v2.3.1 二轮, 取代一代的 ServerSelect 直连下拉)
+
+- **用途**: 悬停 ServerMonitor 胶囊展开的覆盖层:逐行列出预设服务器(专用启动器, 现役两个服), 每行 = 状态点(8px) + 名称(13px/600) + 人数(`N / M`, 11px tabular-nums) + 「进入」钮(28×28 纯图标 →, **悬停该行才出现**, tooltip 进入服务器)。数据源 = `cs.suchitems.top/api/status` + 预设 `sid` 映射
+- **Props**: `servers`([{name, addr, sid, status, players, maxplayers}]), `onEnter(addr)`
+- **何时用**: 仅主页, 锚定状态胶囊下方(覆盖层, 不占布局)
+- **何时不用**: 编辑页/头像页;预设列表为空时显示引导文案(去常用设置配 ConnectServer)
+- **交互**: 悬停胶囊展开 / 移出 150ms 后收起(防误关);「进入」= 一次性 `+connect` 该服启动,**不改动**常用设置的 ConnectServer 配置
+- **⚠ 数据红线**: 在线状态与人数只来自状态 API 真实查询;API 失败该行显示「获取失败」灰点, 禁止编造
+- **Flet**: 覆盖层 = `ft.Stack` + `ft.Container`(w=264, 圆角 8px, bg `bg-card`, border `border-visible`, shadow)定位胶囊下方;行 hover 用 `on_hover` 切 bg `bg-ghost` + 显示进入钮(`ft.IconButton` 28×28 圆角 4px)
+
+### 35. ~~副启动按钮 AltLaunchBtn~~(已删, v2.3.1 二轮)
+
+- 练枪启动改放**主页标题栏 WinBtn 练枪变体**(准星图标, 见 #4);此组件从 UI 与组件库移除, 编号保留防错位。
+
+### 36. 主题菜单 ThemeMenu(v2.3.1 收编)
+
+- **用途**: 标题栏主题按钮(WinBtn 变体, 图标=月亮[深]/太阳[浅])点击弹出的方案菜单:深色/浅色/定时切换(选中项 ✓) + 分割线 + 「深色时段设置…」
+- **Props**: `mode`(当前 dark/light/scheduled), `onChange(mode)`, `onOpenPeriod`
+- **何时用**: 主页 + 编辑页标题栏;**修改头像页不放**(裁剪中换装丢进度)
+- **何时不用**: 其他任何位置
+- **Flet**: `ft.PopupMenuButton` 或沿用现有 AlertDialog 菜单(main.py `_open_theme_menu`);菜单项图标=当前选中 ✓(brand), 未选中=各自语义图标;弹层圆角 8px、bg `bg-card`、border `border-visible`、阴影
+- 定时模式说明文案:「区间内深色、其余浅色; 支持跨午夜 (如 19:00-07:00)」
+
+### 37. 表单弹窗 FormDialog(v2.3.1 收编)
+
+- **用途**: 轻量表单弹窗共用形态:标题(15px/700) + 表单行 + 说明小字(11px) + 右下操作(取消=透明文字钮, 保存=主色实心钮)。现役实例:深色时段(开始/结束 HH:MM mono 输入)。(自定义服务器弹窗已随直连下拉一并删除, v2.3.1 二轮)
+- **Props**: `title`, `content`(行列表), `desc`(可选), `onCancel`, `onSave`
+- **何时用**: 需要少量输入的确认型交互
+- **何时不用**: 无输入的纯提示(用 Snackbar/状态栏错误);复杂流程(整页)
+- **Flet**: `ft.AlertDialog`(modal=False, bgcolor `bg-card`);取消=`ft.TextButton`, 保存=`ft.FilledButton`(bg `brand` 白字, radius 8);遮罩为 Flet 原生 barrier
+- ⚠ 弹窗不套窗口外壳(见 #1 何时不用)
+
+### 38. 提示条 HintBar(v2.3.1 收编, 原 CFG 页内联结构)
+
+- **用途**: CFG 配置页顶部条件提示:警告(琥珀底+边框, 缺 `+exec auto.cfg`, 动作「一键添加」)/错误(红底+边框, 预设文件缺失, 动作「重新植入」)。图标 16px + 文案 12px + 右侧动作按钮
+- **Props**: `variant`(warn/err), `text`, `action`(按钮文案+回调)
+- **何时用**: CFG 页条件显示(两个条件都成立时上下堆叠)
+- **何时不用**: 常驻信息(那是 page-head 的 desc);工具运行状态(用 ToolStatus)
+- **Flet**: `ft.Container`(bg `warn-bg`/`err-bg`, border 1px `status-amber`/`status-red`, padding 12/8)内 Row: Icon(warning_amber/error_outline 16px)+Text(expand)+OutlinedButton(主色实心, h=28)
 
 ---
 
 ## 视图结构速查(供 Flet 翻译对照)
 
 ```
-主页 (360×510)
-└─ Window → TitleBar(VersionTag + WinBtn×3) → launcher-body
-   └─ launcher-card: Avatar → Nickname → ServerMonitor → LaunchButton
+主页 (360×510, v2.3.1 二轮)
+└─ Window (DWM 圆角) → TitleBar(VersionTag + 产品名15px | WinBtn: 练枪/主题/配置/最小化/关闭)
+   → launcher-card: Avatar → Nickname(24px) → ServerMonitor(主服状态+chevron) → LaunchButton(110 圆)
+   ├─ ServerPanel (悬停胶囊展开: 预设服逐行, 悬停行出「进入」钮)
+   └─ ThemeMenu (主题按钮弹出)
 
 编辑页 (784×600)
-└─ Window → EditTitleBar(BarButton×4 + Save + WinBtn×2)
-   → edit-body: SidebarNav(nav-item×4) + content
+└─ Window → EditTitleBar(BarButton×4 + Save | WinBtn: 主题/最小化/关闭)
+   → edit-body: SidebarNav(nav-item×4) + content [+ ThemeMenu]
    ├─ group-0 常用设置: PageHead + FieldGrid(ConfigCard×6)
    ├─ group-1 加载器:   PageHead + ConfigCard(LaunchSplit: textarea + RecPanel)
    ├─ group-2 修复工具: PageHead + 超时行 + ToolGrid(ToolCard×4)
-   └─ group-3 CFG 配置: 顶部说明 + 提示条×N + 组标题×4 + ConfigCard×23 (2026-08-23 新增, 见 DESIGN.md CFG 配置页)
+   └─ group-3 CFG 配置: 顶部说明 + HintBar×N + 组标题×4 + ConfigCard×23
    → StatusBar(Icon + EncGroup)
 
-修改头像 (784×600, 2026-08-23 新增)
-└─ Window → EditTitleBar(返回 + 标题「修改头像」+ WinBtn×2)
+修改头像 (784×600, 无主题按钮)
+└─ Window → EditTitleBar 变体(返回 + 标题「修改头像」+ WinBtn×2)
    → avatar-body: crop-stage(CropCanvas: Image + CropBox) + avatar-side
    └─ avatar-side: PreviewAvatar(96px 圆) + 提示 + AvatarActionBtn×4(选择图片/恢复默认/取消/保存)
+
+全局覆盖层
+└─ FormDialog(深色时段) — 跨窗口居中遮罩
 ```

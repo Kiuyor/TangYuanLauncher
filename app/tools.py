@@ -108,8 +108,10 @@ def _file_md5(path: str) -> str:
 def _install_loader(csgo_dir: str, on_done: Callable[[bool, str], None] | None = None):
     """安装优化版 Loader 为 newloader.exe(不覆盖原件, 零风险)。
 
-    启动链(应用启动按钮)优先使用 newloader.exe, 原件 Loader.exe
+    启动链(on_launch_click)优先使用 newloader.exe, 原件 Loader.exe
     保持不动; 想回退直接删除 newloader.exe 即可。
+    2026-09-05 起由启动逻辑自动调用(目录缺失才静默安装), 修复工具页
+    同名手动工具已删, 本函数保留供启动链与回归测试使用。
     """
     src = os.path.join(ASSETS_DIR, ASSET_LOADER)
     if not os.path.isfile(src):
@@ -136,8 +138,9 @@ def _install_loader(csgo_dir: str, on_done: Callable[[bool, str], None] | None =
 def _update_items(csgo_dir: str, on_done: Callable[[bool, str], None] | None = None):
     """用扩展版 items_730.bin 覆盖旧版(原名备份, 可还原)。
 
-    扩展版含 1695 个物品 ID(旧版 992): 库存/商店皮肤更全,
-    含 AK-47 咆哮等绝版皮肤。服务端无需任何修改。
+    2026-08-31 版: 6350 记录 — 每个武器涂装两份(普通 + StatTrak 计数0),
+    10 种刀 240 涂装×2份(普通版仅 ★ 后缀), 印花 869 种×4 + 热门 225 种×8,
+    改名卡 20 份, 音乐盒/徽章全量。服务端无需任何修改。
     """
     src = os.path.join(ASSETS_DIR, ASSET_ITEMS)
     if not os.path.isfile(src):
@@ -264,22 +267,11 @@ REPAIR_TOOLS: list[RepairTool] = [
         handler=_clean_reg_leftover,
     ),
     RepairTool(
-        name="安装优化 Loader (免残留)",
-        file=None,
-        category="Loader",
-        desc="安装优化版 Loader 为 newloader.exe, 不覆盖原件(零风险)。"
-             "应用启动按钮优先使用它; 游戏退出后自动清理注册表,"
-             "防止残留污染。回退: 直接删除 newloader.exe。",
-        action="复制优化版 Loader 为游戏目录下的 newloader.exe",
-        risk="低",
-        confirm="将安装 newloader.exe 到游戏目录(原件 Loader.exe 不动),是否继续?",
-        handler=_install_loader,
-    ),
-    RepairTool(
         name="更新皮肤库 items_730.bin",
         file=None,
         category="物品库",
-        desc="用扩展版物品库(1695 个物品,含 AK-47 咆哮等绝版皮肤)"
+        desc="用扩展版物品库(6350 条记录: 武器/刀涂装普通+StatTrak 双份,"
+             "印花/音乐盒/徽章全量, 含 AK-47 咆哮等绝版皮肤)"
              "替换旧版,库存/商店皮肤显示更全。原名自动备份。",
         action="备份并覆盖 platform\\items_730.bin",
         risk="低",

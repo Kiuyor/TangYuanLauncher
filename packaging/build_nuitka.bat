@@ -1,5 +1,5 @@
 @echo off
-rem Nuitka directory build - TangYuan Launcher v2.2.4
+rem Nuitka directory build - TangYuan Launcher v2.3.1
 rem Usage: double-click or run from cmd
 rem Output: build\nuitka\main.dist\ (engine copy below; game chunks via prepare_chunks.py)
 setlocal
@@ -7,7 +7,8 @@ cd /d "%~dp0\.."
 set "PYTHONPATH="
 set "FLET_ENGINE=%USERPROFILE%\.flet\client\flet-desktop-full-0.86.5\flet"
 
-".venv311\Scripts\python.exe" -m nuitka --standalone ^
+rem .venv = »î¶¯ÐéÄâ»·¾³ (run.bat Í¬¿î); .venv311 µÄ uv trampoline ÒÑËð»µ
+".venv\Scripts\python.exe" -m nuitka --standalone ^
   --assume-yes-for-downloads ^
   --output-filename=RevIniEditor.exe ^
   --output-dir=build\nuitka ^
@@ -16,8 +17,8 @@ set "FLET_ENGINE=%USERPROFILE%\.flet\client\flet-desktop-full-0.86.5\flet"
   --windows-product-name="TangYuanLauncher" ^
   --windows-company-name="RevIniEditor" ^
   --windows-file-description="CS:GO rev.ini config tool" ^
-  --windows-file-version=2.2.4.0 ^
-  --windows-product-version=2.2.4.0 ^
+  --windows-file-version=2.3.1.0 ^
+  --windows-product-version=2.3.1.0 ^
   --include-package=flet ^
   --include-package=flet_desktop ^
   --include-package-data=flet ^
@@ -29,7 +30,6 @@ set "FLET_ENGINE=%USERPROFILE%\.flet\client\flet-desktop-full-0.86.5\flet"
   --enable-plugin=no-qt ^
   --lto=auto ^
   --remove-output ^
-  --nofollow-import-to=PIL ^
   --nofollow-import-to=zstandard ^
   main.py
 
@@ -59,13 +59,31 @@ rem packaged builds (app package is embedded, __file__ unreliable) - ship them h
 mkdir "build\nuitka\main.dist\assets" >nul 2>nul
 copy /y "assets\Loader_opt23.exe" "build\nuitka\main.dist\assets\" >nul
 copy /y "assets\items_730.bin" "build\nuitka\main.dist\assets\" >nul
-rem s0up é¢„è®¾éšåŒ… (CFG é¡µä¸€é”®é‡æ–°æ¤å…¥çš„æ•°æ®æº, 2026-08-23)
+rem s0up Ô¤ÉèËæ°ü (CFG Ò³Ò»¼üÖØÐÂÖ²ÈëµÄÊý¾ÝÔ´, 2026-08-23)
 if exist "assets\s0up_preset\" (
   mkdir "build\nuitka\main.dist\assets\s0up_preset" 2>nul
   copy /y "assets\s0up_preset\*" "build\nuitka\main.dist\assets\s0up_preset\" >nul
 )
+rem Á·Ç¹Í¼Ëæ°ü (Ò»¼üÁ·Ç¹Æô¶¯Êý¾ÝÔ´; ¸üÐÂ°ü/Íâ²¿Ä¿Â¼ÓÃ»§Ã»ÓÐÓÎÏ··Ö¿éÔ¤Ö², 2026-08-30 Éó²é)
+if exist "assets\maps\aim_botz.bsp" (
+  mkdir "build\nuitka\main.dist\assets\maps" 2>nul
+  copy /y "assets\maps\aim_botz.bsp" "build\nuitka\main.dist\assets\maps\" >nul
+)
+rem ³ö³§Í·ÏñËæ°ü (ÐÞ¸ÄÍ·ÏñÒ³¡¸»Ö¸´Ä¬ÈÏ¡¹Êý¾ÝÔ´, app\avatar.py restore_default_avatar, 2026-08-30 Éó²é)
+copy /y "assets\default_avatar.dat" "build\nuitka\main.dist\assets\" >nul
+copy /y "assets\default_avatar1.dat" "build\nuitka\main.dist\assets\" >nul
 if not exist "build\nuitka\main.dist\assets\Loader_opt23.exe" (
   echo [ERROR] assets copy failed
+  pause
+  exit /b 1
+)
+if not exist "build\nuitka\main.dist\assets\default_avatar.dat" (
+  echo [ERROR] default_avatar copy failed
+  pause
+  exit /b 1
+)
+if not exist "build\nuitka\main.dist\assets\maps\aim_botz.bsp" (
+  echo [ERROR] aim_botz.bsp copy failed
   pause
   exit /b 1
 )

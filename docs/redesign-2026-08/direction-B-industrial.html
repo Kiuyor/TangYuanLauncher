@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>方向 B · 图纸 — 汤圆启动器大改方向稿</title>
+<style>
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:400; src:url('../fonts/sc/HarmonyOS_SansSC_Regular.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:500; src:url('../fonts/sc/HarmonyOS_SansSC_Medium.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:700; src:url('../fonts/sc/HarmonyOS_SansSC_Bold.woff2') format('woff2'); }
+  :root {
+    --bg:#0b0c0e; --backdrop:#050506;
+    --line:#24262b; --line-soft:#1a1c20;
+    --ink:#f2f2f0; --ink2:#b9b9b4; --ink3:#7c7c76;
+    --acc:#f2a51f; --acc-press:#d98f12; --acc-ink:#131313;
+    --ok:#f2a51f; --dim:#5a5a54;
+    --grid:rgba(255,255,255,.028);
+  }
+  html[data-scheme="light"] {
+    --bg:#f7f7f5; --backdrop:#e2e2de;
+    --line:#d5d5cf; --line-soft:#e4e4df;
+    --ink:#151513; --ink2:#42423e; --ink3:#8a8a82;
+    --acc:#e0900c; --acc-press:#c67e08; --acc-ink:#141414;
+    --ok:#e0900c; --dim:#a3a39a;
+    --grid:rgba(20,20,20,.03);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; }
+  body {
+    background:var(--backdrop);
+    font-family:"HarmonyOS Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+    display:flex; align-items:center; justify-content:center; color:var(--ink);
+  }
+  .mono { font-family:"JetBrains Mono",Consolas,monospace; }
+  svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-0.15em; flex-shrink:0; }
+
+  /* ===== 窗口 ===== */
+  .win { width:360px; height:510px; border-radius:2px; overflow:hidden; position:relative;
+    background:var(--bg); border:1px solid var(--line); box-shadow:0 20px 60px rgba(0,0,0,.5);
+    display:flex; flex-direction:column; }
+  /* 工程图纸网格 + 角标 */
+  .win::before { content:""; position:absolute; inset:0; pointer-events:none;
+    background:
+      repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 28px),
+      repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 28px); }
+  .tick { position:absolute; width:12px; height:12px; pointer-events:none; }
+  .tick.tl { top:6px; left:6px; border-top:1px solid var(--acc); border-left:1px solid var(--acc); }
+  .tick.tr { top:6px; right:6px; border-top:1px solid var(--acc); border-right:1px solid var(--acc); }
+
+  .toggle { position:fixed; top:10px; right:12px; z-index:9; height:28px; padding:0 12px; border-radius:2px;
+    border:1px solid var(--line); background:var(--bg); color:var(--ink2); font-size:12px; cursor:pointer; }
+  .caption { position:fixed; bottom:12px; left:0; right:0; text-align:center; font-size:11px; color:var(--ink3); user-select:none; }
+
+  /* ===== 标题栏 ===== */
+  .titlebar { height:46px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between;
+    padding:0 10px 0 14px; border-bottom:1px solid var(--line); }
+  .brand { display:flex; align-items:baseline; gap:8px; }
+  .brand-name { font-size:14px; font-weight:700; letter-spacing:1px; }
+  .ver { font-size:10px; color:var(--acc); border:1px solid var(--acc); padding:1px 6px; }
+  .winbtns { display:flex; }
+  .wb { width:30px; height:30px; display:flex; align-items:center; justify-content:center; color:var(--ink3);
+    font-size:13px; cursor:pointer; transition:background-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1); }
+  .wb:hover { background:var(--line-soft); color:var(--ink); }
+
+  /* ===== 主体 ===== */
+  .body { flex:1; display:flex; flex-direction:column; padding:16px 14px 12px; gap:0; }
+
+  /* 身份行（左对齐） */
+  .identity { display:flex; align-items:center; gap:12px; }
+  .avatar { width:56px; height:56px; border-radius:2px; border:1px solid var(--line); cursor:pointer; position:relative;
+    display:flex; align-items:center; justify-content:center; background:var(--line-soft);
+    transition:border-color 150ms cubic-bezier(.4,0,.2,1); }
+  .avatar:hover { border-color:var(--acc); }
+  .avatar span { font-size:22px; font-weight:700; color:var(--ink2); }
+  .id-meta { display:flex; flex-direction:column; gap:3px; }
+  .nickname { font-size:18px; font-weight:700; letter-spacing:1px; }
+  .status-line { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--ink2); }
+  .led { width:7px; height:7px; background:var(--acc); animation:led-blink 2s steps(1) infinite; }
+  @keyframes led-blink { 0%,100% { opacity:1; } 50% { opacity:.35; } }
+
+  /* 分节标题 */
+  .sec { margin-top:16px; display:flex; align-items:center; gap:8px; font-size:10px; color:var(--ink3); letter-spacing:2px; }
+  .sec::after { content:""; flex:1; height:1px; background:var(--line-soft); }
+
+  /* 服务器行 */
+  .srv { display:flex; align-items:center; gap:8px; height:38px; border-bottom:1px solid var(--line-soft); cursor:default;
+    transition:background-color 150ms cubic-bezier(.4,0,.2,1); }
+  .srv:hover { background:var(--line-soft); }
+  .srv-dot { width:6px; height:6px; background:var(--acc); flex-shrink:0; }
+  .srv.off .srv-dot { background:var(--dim); }
+  .srv.off .srv-name, .srv.off .srv-n { color:var(--dim); }
+  .srv-name { font-size:13px; font-weight:500; }
+  .srv-n { margin-left:auto; font-size:11px; color:var(--ink2); }
+  .srv-enter { font-size:11px; color:var(--acc); opacity:0; padding:2px 4px; transition:opacity 150ms cubic-bezier(.4,0,.2,1); }
+  .srv:hover .srv-enter { opacity:1; }
+
+  /* 启动条 */
+  .btn-launch { margin-top:auto; height:52px; background:var(--acc); color:var(--acc-ink); cursor:pointer;
+    display:flex; align-items:center; justify-content:space-between; padding:0 16px;
+    transition:background-color 180ms cubic-bezier(.4,0,.2,1), transform 120ms cubic-bezier(.4,0,.2,1); }
+  .btn-launch:hover { background:var(--acc-press); }
+  .btn-launch:active { transform:translateY(1px); }
+  .btn-launch .l-main { font-size:15px; font-weight:700; letter-spacing:3px; display:flex; align-items:center; gap:8px; }
+  .btn-launch .l-sub { font-size:11px; opacity:.75; }
+
+  /* 次级操作 */
+  .quick { display:flex; gap:8px; margin-top:10px; }
+  .qb { flex:1; height:40px; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; gap:7px;
+    font-size:12px; font-weight:500; color:var(--ink2); cursor:pointer;
+    transition:border-color 150ms cubic-bezier(.4,0,.2,1), color 150ms cubic-bezier(.4,0,.2,1), background-color 150ms cubic-bezier(.4,0,.2,1); }
+  .qb:hover { border-color:var(--acc); color:var(--ink); }
+
+  /* 底部状态行 */
+  .footer { margin-top:12px; font-size:10px; color:var(--ink3); letter-spacing:1px; }
+  .footer b { color:var(--acc); font-weight:500; }
+</style>
+</head>
+<body>
+<button class="toggle" onclick="var h=document.documentElement; h.getAttribute('data-scheme')==='light' ? h.removeAttribute('data-scheme') : h.setAttribute('data-scheme','light'); this.textContent = h.getAttribute('data-scheme')==='light' ? '深色' : '浅色';">浅色</button>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21"/></symbol>
+  <symbol id="i-crosshair" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+</svg>
+
+<div class="win">
+  <div class="tick tl"></div><div class="tick tr"></div>
+
+  <div class="titlebar">
+    <div class="brand"><span class="brand-name">汤圆启动器</span><span class="ver mono">v1.35.4.2</span></div>
+    <div class="winbtns">
+      <div class="wb" title="练枪启动"><svg class="ic"><use href="#i-crosshair"/></svg></div>
+      <div class="wb" title="主题"><svg class="ic"><use href="#i-moon"/></svg></div>
+      <div class="wb"><svg class="ic"><use href="#i-minus"/></svg></div>
+      <div class="wb"><svg class="ic"><use href="#i-x"/></svg></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="identity">
+      <div class="avatar" title="修改头像"><span>汤</span></div>
+      <div class="id-meta">
+        <div class="nickname">米汤</div>
+        <div class="status-line mono"><span class="led"></span>ONLINE · 12/32</div>
+      </div>
+    </div>
+
+    <div class="sec">服务器 // SERVERS</div>
+    <div class="srv">
+      <span class="srv-dot"></span><span class="srv-name">未烬社区服</span>
+      <span class="srv-n mono">12/32</span><span class="srv-enter mono">[进入]</span>
+    </div>
+    <div class="srv off">
+      <span class="srv-dot"></span><span class="srv-name">未烬练枪服</span>
+      <span class="srv-n mono">OFFLINE</span><span class="srv-enter mono">[进入]</span>
+    </div>
+
+    <div class="btn-launch">
+      <span class="l-main"><svg class="ic"><use href="#i-play"/></svg>启动游戏</span>
+      <span class="l-sub mono">csgo.exe ▸</span>
+    </div>
+    <div class="quick">
+      <div class="qb"><svg class="ic"><use href="#i-crosshair"/></svg>练枪模式</div>
+      <div class="qb"><svg class="ic"><use href="#i-folder"/></svg>游戏目录</div>
+    </div>
+
+    <div class="footer mono">AUTO.CFG <b>✓ 已备份</b> · S0UP 预设就绪</div>
+  </div>
+</div>
+
+<div class="caption">方向 B · 图纸 — 工业高对比 · 信号琥珀 · 等宽数据 · 右上角切换深浅</div>
+</body>
+</html>

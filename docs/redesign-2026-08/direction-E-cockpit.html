@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>方向 E · 座舱 — 汤圆启动器放飞批次</title>
+<style>
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:400; src:url('../fonts/sc/HarmonyOS_SansSC_Regular.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:500; src:url('../fonts/sc/HarmonyOS_SansSC_Medium.woff2') format('woff2'); }
+  @font-face { font-family:"HarmonyOS Sans SC"; font-weight:700; src:url('../fonts/sc/HarmonyOS_SansSC_Bold.woff2') format('woff2'); }
+  :root {
+    --bg:#10140e; --backdrop:#080a07;
+    --panel:#161c13; --panel2:#1d2518;
+    --line:#2e3a28; --line-soft:#222b1e;
+    --ink:#e8ede2; --ink2:#aeb8a4; --ink3:#78836e;
+    --hud:#5fd4d0; --hud-deep:#3aa8a4; --hud-dim:rgba(95,212,208,.14);
+    --warn:#e0b04c;
+    --hatch:rgba(95,212,208,.06);
+  }
+  html[data-scheme="light"] {
+    --bg:#e9ebe1; --backdrop:#d3d7c6;
+    --panel:#f4f6ec; --panel2:#e2e6d5;
+    --line:#b7bfa6; --line-soft:#ccd2bc;
+    --ink:#1d2418; --ink2:#46503c; --ink3:#7c8670;
+    --hud:#0e7f7b; --hud-deep:#0a615e; --hud-dim:rgba(14,127,123,.10);
+    --warn:#a3721c;
+    --hatch:rgba(14,127,123,.07);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; }
+  body { background:var(--backdrop); font-family:"HarmonyOS Sans SC","Microsoft YaHei","PingFang SC",sans-serif;
+    display:flex; align-items:center; justify-content:center; color:var(--ink); }
+  .mono { font-family:"JetBrains Mono",Consolas,monospace; }
+  svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-0.15em; flex-shrink:0; }
+
+  .win { width:360px; height:510px; background:var(--bg); border:1px solid var(--line); position:relative;
+    display:flex; flex-direction:column; overflow:hidden; }
+  /* 座舱斜切轮廓 */
+  .win::before { content:""; position:absolute; inset:0; pointer-events:none;
+    background:repeating-linear-gradient(45deg, var(--hatch) 0 2px, transparent 2px 14px); opacity:.5; }
+  .toggle { position:fixed; top:10px; right:12px; z-index:9; height:28px; padding:0 12px; border:1px solid var(--line);
+    background:var(--panel); color:var(--ink2); font-size:12px; cursor:pointer; }
+  .caption { position:fixed; bottom:12px; left:0; right:0; text-align:center; font-size:11px; color:var(--ink3); user-select:none; }
+
+  /* 顶部仪表条 */
+  .dash { height:44px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between;
+    padding:0 12px; border-bottom:1px solid var(--line); background:var(--panel); position:relative; z-index:1; }
+  .dash::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:3px;
+    background:repeating-linear-gradient(45deg, var(--hud-dim) 0 6px, transparent 6px 12px); }
+  .callsign { display:flex; align-items:center; gap:8px; }
+  .callsign .name { font-size:14px; font-weight:700; letter-spacing:2px; }
+  .callsign .tail { font-size:10px; color:var(--hud); border:1px solid var(--hud); padding:1px 6px; }
+  .dash-btns { display:flex; gap:4px; }
+  .db { height:26px; min-width:26px; padding:0 6px; display:flex; align-items:center; justify-content:center; gap:4px;
+    color:var(--ink3); font-size:12px; cursor:pointer; clip-path:polygon(4px 0,100% 0,calc(100% - 4px) 100%,0 100%);
+    background:var(--panel2); transition:color 150ms cubic-bezier(.4,0,.2,1); }
+  .db:hover { color:var(--hud); }
+
+  /* 双列座舱 */
+  .cockpit { flex:1; display:flex; position:relative; z-index:1; }
+
+  /* 左：飞行员 + 雷达 */
+  .left { flex:1.35; padding:14px; display:flex; flex-direction:column; border-right:1px solid var(--line-soft); }
+  .blk-label { font-size:9px; letter-spacing:3px; color:var(--ink3); margin-bottom:8px; }
+  .pilot { display:flex; align-items:center; gap:10px; }
+  .pilot .ava { width:52px; height:52px; cursor:pointer; background:var(--panel2); border:1px solid var(--line);
+    clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+    display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; color:var(--hud);
+    transition:border-color 150ms cubic-bezier(.4,0,.2,1); }
+  .pilot .ava:hover { border-color:var(--hud); }
+  .pilot .pm .n { font-size:17px; font-weight:700; }
+  .pilot .pm .s { font-size:10px; color:var(--ink3); margin-top:2px; }
+  .pilot .pm .s b { color:var(--hud); font-weight:500; }
+
+  /* 雷达 */
+  .radar-wrap { margin:auto 0; display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .radar { width:150px; height:150px; border-radius:50%; position:relative;
+    background:
+      radial-gradient(circle, transparent 58%, var(--hud-dim) 59% 60%, transparent 61%),
+      radial-gradient(circle, transparent 37%, var(--hud-dim) 38% 39%, transparent 40%),
+      radial-gradient(circle, transparent 17%, var(--hud-dim) 18% 19%, transparent 20%),
+      radial-gradient(circle, var(--hud-dim) 0 2px, transparent 3px),
+      radial-gradient(circle at 50% 50%, rgba(95,212,208,.05), transparent 70%);
+    border:1px solid var(--line); }
+  html[data-scheme="light"] .radar { background:
+      radial-gradient(circle, transparent 58%, var(--hud-dim) 59% 60%, transparent 61%),
+      radial-gradient(circle, transparent 37%, var(--hud-dim) 38% 39%, transparent 40%),
+      radial-gradient(circle, transparent 17%, var(--hud-dim) 18% 19%, transparent 20%),
+      radial-gradient(circle, var(--hud-dim) 0 2px, transparent 3px),
+      radial-gradient(circle at 50% 50%, rgba(14,127,123,.06), transparent 70%); }
+  .radar::before, .radar::after { content:""; position:absolute; background:var(--line-soft); }
+  .radar::before { left:50%; top:4px; bottom:4px; width:1px; }
+  .radar::after { top:50%; left:4px; right:4px; height:1px; }
+  .sweep { position:absolute; inset:3px; border-radius:50%;
+    background:conic-gradient(from 0deg, var(--hud-dim), transparent 70deg, transparent 360deg);
+    animation:sweep-rot 4s linear infinite; }
+  @keyframes sweep-rot { to { transform:rotate(360deg); } }
+  .blip { position:absolute; width:6px; height:6px; border-radius:50%; background:var(--hud); }
+  .blip.b1 { top:34%; left:62%; }
+  .blip.b2 { top:64%; left:38%; width:5px; height:5px; background:var(--ink3); }
+
+  .btn-engage { height:46px; width:100%; cursor:pointer; border:none;
+    clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%);
+    background:var(--hud); color:#08211f; font-family:inherit;
+    display:flex; align-items:center; justify-content:center; gap:9px;
+    font-size:14px; font-weight:700; letter-spacing:4px;
+    transition:filter 180ms cubic-bezier(.4,0,.2,1), transform 120ms cubic-bezier(.4,0,.2,1); }
+  html[data-scheme="light"] .btn-engage { color:#f2fbfa; }
+  .btn-engage:hover { filter:brightness(1.08); }
+  .btn-engage:active { transform:translateY(1px); }
+  .engage-sub { text-align:center; font-size:9px; color:var(--ink3); letter-spacing:2px; margin-top:6px; }
+
+  /* 右：目标列表 */
+  .right { flex:1; padding:14px 12px; display:flex; flex-direction:column; background:var(--panel); }
+  .tgt { border:1px solid var(--line-soft); background:var(--bg); padding:9px 9px 8px; margin-bottom:8px; cursor:default;
+    clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px);
+    transition:border-color 150ms cubic-bezier(.4,0,.2,1); }
+  .tgt:hover { border-color:var(--hud); }
+  .tgt .t-name { font-size:13px; font-weight:500; display:flex; align-items:center; gap:6px; }
+  .tgt .t-dot { width:6px; height:6px; background:var(--hud); }
+  .tgt.off .t-dot { background:var(--ink3); }
+  .tgt.off .t-name { color:var(--ink3); }
+  .tgt .t-meta { margin-top:4px; font-size:10px; color:var(--ink3); display:flex; justify-content:space-between; }
+  .tgt .t-enter { color:var(--hud); opacity:0; font-size:10px; transition:opacity 150ms cubic-bezier(.4,0,.2,1); }
+  .tgt:hover .t-enter { opacity:1; }
+  .sys { margin-top:auto; font-size:9px; color:var(--ink3); letter-spacing:1px; line-height:1.9; }
+  .sys b { color:var(--hud); font-weight:500; }
+</style>
+</head>
+<body>
+<button class="toggle" onclick="var h=document.documentElement; h.getAttribute('data-scheme')==='light' ? h.removeAttribute('data-scheme') : h.setAttribute('data-scheme','light'); this.textContent = h.getAttribute('data-scheme')==='light' ? '深色' : '浅色';">浅色</button>
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+  <symbol id="i-crosshair" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+</svg>
+
+<div class="win">
+  <div class="dash">
+    <div class="callsign"><span class="name">汤圆启动器</span><span class="tail mono">v1.35.4.2</span></div>
+    <div class="dash-btns">
+      <div class="db" title="练枪"><svg class="ic"><use href="#i-crosshair"/></svg></div>
+      <div class="db" title="目录"><svg class="ic"><use href="#i-folder"/></svg></div>
+      <div class="db"><svg class="ic"><use href="#i-minus"/></svg></div>
+      <div class="db"><svg class="ic"><use href="#i-x"/></svg></div>
+    </div>
+  </div>
+
+  <div class="cockpit">
+    <div class="left">
+      <div class="blk-label">PILOT · 飞行员</div>
+      <div class="pilot">
+        <div class="ava" title="修改头像">汤</div>
+        <div class="pm">
+          <div class="n">米汤</div>
+          <div class="s mono">STATUS: <b>READY</b></div>
+        </div>
+      </div>
+
+      <div class="radar-wrap">
+        <div class="radar">
+          <div class="sweep"></div>
+          <span class="blip b1"></span><span class="blip b2"></span>
+        </div>
+        <div class="btn-engage"><svg class="ic"><use href="#i-play"/></svg>启 动</div>
+        <div class="engage-sub mono">ENGAGE · csgo.exe</div>
+      </div>
+    </div>
+
+    <div class="right">
+      <div class="blk-label">TARGETS · 服务器</div>
+      <div class="tgt">
+        <div class="t-name"><span class="t-dot"></span>未烬社区服</div>
+        <div class="t-meta mono"><span>12/32 ONLINE</span><span class="t-enter">进入 ▸</span></div>
+      </div>
+      <div class="tgt off">
+        <div class="t-name"><span class="t-dot"></span>未烬练枪服</div>
+        <div class="t-meta mono"><span>OFFLINE</span><span class="t-enter">进入 ▸</span></div>
+      </div>
+      <div class="sys mono">
+        AUTO.CFG <b>✓</b><br>s0up PRESET <b>✓</b><br>BACKUP <b>ON</b>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="caption">方向 E · 座舱 — HUD 军绿×冷青 · 斜切轮廓 · 雷达扫掠 · 双列仪表布局 · 右上切换深浅</div>
+</body>
+</html>
